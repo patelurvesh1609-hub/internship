@@ -1,0 +1,68 @@
+Route (web.php)
+
+use App\Http\Controllers\MathController;
+
+Route::get('/math', [MathController::class, 'calculate']);
+
+
+app/Http/Controllers/MathController.php
+
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+
+class MathController extends Controller
+{
+    public function calculate()
+    {
+        // Inputs
+        $a = 10;
+        $b = 5;
+
+        // Math Logic
+        $sum = $a + $b;
+        $difference = $a - $b;
+        $product = $a * $b;
+        $division = $b != 0 ? $a / $b : 0;
+        $percentage = ($a / 100) * 20;
+
+        // Send data to view
+        return view('math-view', compact(
+            'a',
+            'b',
+            'sum',
+            'difference',
+            'product',
+            'division',
+            'percentage'
+        ));
+    }
+}
+
+
+resources/views/math-view.blade.php
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Math Logic in Controller</title>
+</head>
+<body>
+
+<h2>Dynamic Math Calculation</h2>
+
+<p>A = {{ $a }}</p>
+<p>B = {{ $b }}</p>
+
+<hr>
+
+<p>Addition: {{ $sum }}</p>
+<p>Subtraction: {{ $difference }}</p>
+<p>Multiplication: {{ $product }}</p>
+<p>Division: {{ $division }}</p>
+<p>20% of A: {{ $percentage }}</p>
+
+</body>
+</html>
