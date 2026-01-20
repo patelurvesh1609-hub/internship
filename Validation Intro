@@ -1,0 +1,69 @@
+Route (web.php)
+
+use App\Http\Controllers\FormController;
+
+Route::get('/form', [FormController::class, 'showForm']);
+Route::post('/submit', [FormController::class, 'submitForm']);
+
+app/Http/Controllers/FormController.php
+
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+
+class FormController extends Controller
+{
+    public function showForm()
+    {
+        return view('form');
+    }
+
+    public function submitForm(Request $request)
+    {
+        // Validation logic
+        $request->validate([
+            'name'  => 'required|min:3',
+            'email' => 'required|email',
+            'age'   => 'required|numeric|min:18'
+        ]);
+
+        // If validation passes
+        return "Form Submitted Successfully!";
+    }
+}
+
+resources/views/form.blade.php
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Laravel Form Validation</title>
+</head>
+<body>
+
+<h2>Basic Form Validation</h2>
+
+{{-- Display all errors --}}
+@if ($errors->any())
+    <ul style="color:red">
+        @foreach ($errors->all() as $error)
+            <li>{{ $error }}</li>
+        @endforeach
+    </ul>
+@endif
+
+<form method="POST" action="/submit">
+    @csrf
+
+    Name: <input type="text" name="name"><br><br>
+    Email: <input type="text" name="email"><br><br>
+    Age: <input type="text" name="age"><br><br>
+
+    <button type="submit">Submit</button>
+</form>
+
+</body>
+</html>
+
