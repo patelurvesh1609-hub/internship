@@ -1,0 +1,68 @@
+routes/web.php
+
+use App\Http\Controllers\UrlDemoController;
+
+Route::get('/home', [UrlDemoController::class, 'index'])->name('home');
+Route::get('/profile/{id}', [UrlDemoController::class, 'profile'])->name('profile');
+
+
+app/Http/Controllers/UrlDemoController.php
+
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+
+class UrlDemoController extends Controller
+{
+    public function index()
+    {
+        return view('url-demo');
+    }
+
+    public function profile($id)
+    {
+        return "User ID : " . $id;
+    }
+}
+
+resources/views/url-demo.blade.php
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Laravel URL Generation</title>
+</head>
+<body>
+
+<h2>Laravel URL Generation - One Program</h2>
+
+<!-- url() -->
+<p>URL Helper:
+    {{ url('/home') }}
+</p>
+
+<!-- route() -->
+<p>Route Helper:
+    {{ route('home') }}
+</p>
+
+<!-- route with parameter -->
+<p>Route with Parameter:
+    {{ route('profile', 1) }}
+</p>
+
+<!-- asset() -->
+<p>Asset URL:
+    {{ asset('css/app.css') }}
+</p>
+
+<!-- Links -->
+<a href="{{ url('/home') }}">Home</a><br>
+<a href="{{ route('profile', 2) }}">Profile</a>
+
+</body>
+</html>
+
+resources/views/url-demo.blade.php
