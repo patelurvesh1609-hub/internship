@@ -1,0 +1,62 @@
+Controller
+
+public function submitForm(Request $request)
+{
+    $request->validate([
+        'name'  => 'required|min:3',
+        'email' => 'required|email',
+        'age'   => 'required|numeric|min:18',
+    ]);
+
+    return "Form submitted successfully";
+}
+
+
+resources/views/form.blade.php
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Validation Errors</title>
+</head>
+<body>
+
+<h2>Form Validation</h2>
+
+{{-- Show all validation errors --}}
+@if ($errors->any())
+    <div style="color:red;">
+        <ul>
+            @foreach ($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+@endif
+
+<form method="POST" action="/submit">
+    @csrf
+
+    Name:
+    <input type="text" name="name" value="{{ old('name') }}">
+    <br><br>
+
+    Email:
+    <input type="text" name="email" value="{{ old('email') }}">
+    <br><br>
+
+    Age:
+    <input type="text" name="age" value="{{ old('age') }}">
+    <br><br>
+
+    <button type="submit">Submit</button>
+</form>
+
+</body>
+</html>
+
+Display Error for a Specific Field
+
+@error('email')
+    <p style="color:red;">{{ $message }}</p>
+@enderror
