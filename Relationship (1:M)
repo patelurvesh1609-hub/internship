@@ -1,0 +1,126 @@
+PART 1️⃣ — CREATE MODELS & MIGRATIONS
+
+1️⃣ Create Category Model + Migration
+📌 Command
+php artisan make:model Category -m
+
+app/Models/Category.php
+database/migrations/xxxx_xx_xx_create_categories_table.php
+
+Schema::create('categories', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->timestamps();
+});
+
+2️⃣ Create Product Model + Migration
+
+php artisan make:model Product -m
+
+app/Models/Product.php
+database/migrations/xxxx_xx_xx_create_products_table.php
+
+Schema::create('products', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->decimal('price', 8, 2);
+
+    $table->foreignId('category_id')
+          ->constrained()
+          ->onDelete('cascade');
+
+    $table->timestamps();
+});
+
+php artisan migrate
+
+PART 2️⃣ — DEFINE RELATIONSHIPS IN MODELS
+
+3️⃣ Category Model (hasMany)
+
+app/Models/Category.php
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Category extends Model
+{
+    protected $fillable = ['name'];
+
+    public function products()
+    {
+        return $this->hasMany(Product::class);
+    }
+}
+
+4️⃣ Product Model (belongsTo)
+
+app/Models/Product.php
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Product extends Model
+{
+    protected $fillable = ['name', 'price', 'category_id'];
+
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
+    }
+}
+
+PART 3️⃣ — USING THE RELATIONSHIP
+
+5️⃣ Create Product Under Category
+$category = Category::find(1);
+
+$category->products()->create([
+    'name' => 'Laptop',
+    'price' => 50000
+]);
+
+6️⃣ Get Products of a Category
+$category = Category::find(1);
+
+foreach ($category->products as $product) {
+    echo $product->name;
+}
+
+7️⃣ Get Category from Product
+$product = Product::find(1);
+echo $product->category->name;
+
+PART 4️⃣ — CONTROLLER EXAMPLE
+
+app/Http/Controllers/ProductController.php
+
+use App\Models\Category;
+use App\Models\Product;
+
+class ProductController extends Controller
+{
+    public function index()
+    {
+        $categories = Category::with('products')->get();
+        return view('products.index', compact('categories'));
+    }
+}
+
+PART 5️⃣ — BLADE VIEW EXAMPLE
+
+resources/views/products/index.blade.php
+
+@foreach($categories as $category)
+    <h3>{{ $category->name }}</h3>
+
+    @foreach($category->products as $product)
+        <p>{{ $product->name }} - ₹{{ $product->price }}</p>
+    @endforeach
+@endforeach
