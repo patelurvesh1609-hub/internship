@@ -1,0 +1,141 @@
+PART 1️⃣ — BASIC SETUP
+
+1️⃣ Notifications Table (REQUIRED for DB 🔥)
+php artisan notifications:table
+php artisan migrate
+
+notifications
+
+2️⃣ User Model Setup
+
+app/Models/User.php
+
+use Illuminate\Notifications\Notifiable;
+
+class User extends Authenticatable
+{
+    use Notifiable;
+}
+
+PART 2️⃣ — CREATE NOTIFICATION CLASS
+
+3️⃣ Create Notification
+php artisan make:notification OrderPlaced
+
+app/Notifications/OrderPlaced.php
+
+PART 3️⃣ — DEFINE CHANNELS (EMAIL + DATABASE)
+
+📄 OrderPlaced.php
+
+app/Notifications/OrderPlaced.php
+
+<?php
+
+namespace App\Notifications;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Messages\MailMessage;
+
+class OrderPlaced extends Notification
+{
+    use Queueable;
+
+    public function via($notifiable)
+    {
+        return ['mail', 'database'];
+    }
+
+    // EMAIL
+    public function toMail($notifiable)
+    {
+        return (new MailMessage)
+            ->subject('Order Confirmed')
+            ->greeting('Hello ' . $notifiable->name)
+            ->line('Your order has been placed successfully.')
+            ->action('View Order', url('/orders'))
+            ->line('Thank you for shopping with us!');
+    }
+
+    // DATABASE
+    public function toDatabase($notifiable)
+    {
+        return [
+            'message' => 'Your order has been placed successfully',
+            'url' => '/orders',
+        ];
+    }
+}
+
+PART 4️⃣ — SEND NOTIFICATION
+
+4️⃣ Send to Single User
+
+📄 Controller
+
+app/Http/Controllers/OrderController.php
+
+use App\Models\User;
+use App\Notifications\OrderPlaced;
+
+public function store()
+{
+    $user = User::find(1);
+
+    $user->notify(new OrderPlaced());
+
+    return "Notification sent";
+}
+
+5️⃣ Send to Multiple Users
+use Illuminate\Support\Facades\Notification;
+
+Notification::send(User::all(), new OrderPlaced());
+
+PART 5️⃣ — EMAIL CONFIGURATION (IMPORTANT 🔥)
+
+.env
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your@gmail.com
+MAIL_PASSWORD=app_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=your@gmail.com
+MAIL_FROM_NAME="Laravel App"
+
+PART 6️⃣ — READ DATABASE NOTIFICATIONS
+
+6️⃣ Fetch Notifications (Controller)
+auth()->user()->notifications;
+
+
+Unread only:
+
+auth()->user()->unreadNotifications;
+
+7️⃣ Show in Blade
+
+📄 Blade
+
+resources/views/notifications.blade.php
+
+@foreach(auth()->user()->notifications as $notification)
+    <p>
+        {{ $notification->data['message'] }}
+        <a href="{{ $notification->data['url'] }}">View</a>
+    </p>
+@endforeach
+
+8️⃣ Mark as Read
+auth()->user()->unreadNotifications->markAsRead();
+
+
+Or single:
+
+$notification->markAsRead();
+
+PART 7️⃣ — QUEUE NOTIFICATIONS (ADVANCED 🔥)
+class OrderPlaced extends Notification implements ShouldQueue
