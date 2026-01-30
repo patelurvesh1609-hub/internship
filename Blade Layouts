@@ -1,0 +1,152 @@
+PART 1️⃣ — BASIC BLADE COMPONENT
+
+1️⃣ Create Component
+
+📌 Command
+php artisan make:component Alert
+
+Files Created
+app/View/Components/Alert.php
+resources/views/components/alert.blade.php
+
+2️⃣ Component Class
+
+app/View/Components/Alert.php
+
+namespace App\View\Components;
+
+use Illuminate\View\Component;
+
+class Alert extends Component
+{
+    public string $type;
+
+    public function __construct($type = 'success')
+    {
+        $this->type = $type;
+    }
+
+    public function render()
+    {
+        return view('components.alert');
+    }
+}
+
+3️⃣ Component View (Using Slot)
+
+resources/views/components/alert.blade.php
+
+<div class="alert alert-{{ $type }}">
+    {{ $slot }}
+</div>
+
+4️⃣ Use Component in Blade
+<x-alert type="danger">
+    Invalid credentials!
+</x-alert>
+
+PART 2️⃣ — NAMED SLOTS (ADVANCED 🔥)
+
+1️⃣ Card Component
+php artisan make:component Card
+
+app/View/Components/Card.php
+resources/views/components/card.blade.php
+
+2️⃣ Card Blade with Named Slots
+
+📄 card.blade.php
+
+<div class="card">
+    <div class="card-header">
+        {{ $header }}
+    </div>
+
+    <div class="card-body">
+        {{ $slot }}
+    </div>
+
+    <div class="card-footer">
+        {{ $footer }}
+    </div>
+</div>
+
+3️⃣ Use Named Slots
+<x-card>
+    <x-slot name="header">
+        Product Details
+    </x-slot>
+
+    Product description goes here...
+
+    <x-slot name="footer">
+        <button>Buy Now</button>
+    </x-slot>
+</x-card>
+
+PART 3️⃣ — PASSING DATA (PROPS)
+<x-alert :type="$errorType">
+    {{ $message }}
+</x-alert>
+
+PART 4️⃣ — ANONYMOUS COMPONENTS (NO CLASS 🔥)
+
+Used for simple UI elements
+
+1️⃣ Create Blade File
+
+resources/views/components/button.blade.php
+
+<button class="btn btn-{{ $type ?? 'primary' }}">
+    {{ $slot }}
+</button>
+
+2️⃣ Use It
+<x-button type="success">
+    Save
+</x-button>
+
+PART 5️⃣ — COMPONENT ATTRIBUTES & MERGING
+<button {{ $attributes->merge(['class' => 'btn']) }}>
+    {{ $slot }}
+</button>
+
+
+Usage:
+
+<x-button class="btn-danger">
+    Delete
+</x-button>
+
+PART 6️⃣ — LAYOUT COMPONENT (VERY IMPORTANT 🔥)
+
+1️⃣ Create Layout
+
+resources/views/components/layout.blade.php
+
+<html>
+<head>
+    <title>{{ $title ?? 'App' }}</title>
+</head>
+<body>
+
+<header>Navbar</header>
+
+<main>
+    {{ $slot }}
+</main>
+
+<footer>Footer</footer>
+
+</body>
+</html>
+
+2️⃣ Use Layout
+<x-layout title="Dashboard">
+    <h1>Welcome</h1>
+</x-layout>
+
+PART 7️⃣ — CONDITIONAL SLOTS
+@if(isset($footer))
+    <div>{{ $footer }}</div>
+@endif
