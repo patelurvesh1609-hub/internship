@@ -1,0 +1,82 @@
+1️⃣ Models (Relationship Setup)
+
+app/Models/Category.php
+
+class Category extends Model
+{
+    public function products()
+    {
+        return $this->hasMany(Product::class);
+    }
+}
+
+
+app/Models/Product.php
+
+class Product extends Model
+{
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
+    }
+}
+
+ Controller
+
+app/Http/Controllers/CategoryController.php
+
+public function index()
+{
+    $categories = Category::all(); // 1 query
+
+    foreach ($categories as $category) {
+        $category->products; // N queries (BAD ❌)
+    }
+
+    return view('categories.index', compact('categories'));
+}
+
+2️⃣ Optimized Code using with()
+
+ Controller
+
+app/Http/Controllers/CategoryController.php
+
+public function index()
+{
+    $categories = Category::with('products')->get();
+
+    return view('categories.index', compact('categories'));
+}
+
+PART 2️⃣ — VIEW CODE (UNCHANGED)
+
+resources/views/categories/index.blade.php
+
+@foreach($categories as $category)
+    <h3>{{ $category->name }}</h3>
+
+    @foreach($category->products as $product)
+        <p>{{ $product->name }}</p>
+    @endforeach
+@endforeach
+
+PART 3️⃣ — MULTIPLE RELATIONSHIPS WITH with()
+Category::with(['products', 'parentCategory'])->get();
+
+
+PART 4️⃣ — NESTED EAGER LOADING
+Order::with('items.product')->get();
+
+PART 5️⃣ — with() vs load()
+Method	When to use
+with()	Before query execution
+load()	After model is retrieved
+$category = Category::find(1);
+$category->load('products');
+
+PART 6️⃣ — DETECT N+1 PROBLEM (DEV TOOL 🔥)
+
+Enable query logging:
+
+\DB::enableQueryLog();
