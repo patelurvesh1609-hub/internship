@@ -1,0 +1,187 @@
+PART 1️⃣ — WHERE LARAVEL HANDLES ERRORS
+
+📄 Main file
+
+app/Exceptions/Handler.php
+
+
+This file controls:
+
+HTTP exceptions (404, 403)
+
+Validation errors
+
+Authentication errors
+
+API vs Web response format
+
+PART 2️⃣ — CUSTOM ERROR PAGES (WEB USERS)
+1️⃣ Create Custom Error Views
+
+📁 Folder
+
+resources/views/errors/
+
+🔹 404 Page
+
+📄 404.blade.php
+
+<h1>404 - Page Not Found</h1>
+<p>The page you are looking for does not exist.</p>
+<a href="/">Go Home</a>
+
+🔹 403 Page
+
+📄 403.blade.php
+
+<h1>403 - Access Denied</h1>
+<p>You are not allowed to access this page.</p>
+
+🔹 500 Page
+
+📄 500.blade.php
+
+<h1>Something went wrong!</h1>
+<p>Please try again later.</p>
+
+
+✔ Laravel auto-loads these
+✔ No extra config needed
+
+PART 3️⃣ — CUSTOM API ERROR RESPONSES (JSON)
+2️⃣ Detect API Requests
+
+Laravel checks:
+
+$request->expectsJson()
+
+
+This is key 🔥
+
+3️⃣ Customize API Errors in Handler
+
+📄 File
+
+app/Exceptions/Handler.php
+
+🔹 404 (API)
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+public function render($request, Throwable $exception)
+{
+    if ($request->expectsJson()) {
+
+        if ($exception instanceof NotFoundHttpException) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Resource not found'
+            ], 404);
+        }
+    }
+
+    return parent::render($request, $exception);
+}
+
+🔹 403 (Unauthorized / Forbidden)
+use Illuminate\Auth\Access\AuthorizationException;
+
+if ($exception instanceof AuthorizationException) {
+    return response()->json([
+        'success' => false,
+        'message' => 'You are not authorized'
+    ], 403);
+}
+
+🔹 500 (Server Error)
+if ($exception instanceof \Exception) {
+    return response()->json([
+        'success' => false,
+        'message' => 'Internal Server Error'
+    ], 500);
+}
+
+PART 4️⃣ — VALIDATION ERRORS (WEB vs API)
+4️⃣ Validation Errors (API)
+
+Laravel already returns JSON for APIs, but you can customize it.
+
+📄 Form Request
+
+app/Http/Requests/StoreProductRequest.php
+
+protected function failedValidation(Validator $validator)
+{
+    throw new HttpResponseException(
+        response()->json([
+            'success' => false,
+            'errors' => $validator->errors()
+        ], 422)
+    );
+}
+
+🔹 API Validation Response
+{
+  "success": false,
+  "errors": {
+    "name": ["The name field is required."]
+  }
+}
+
+5️⃣ Validation Errors (Web)
+
+Laravel automatically:
+
+Redirects back
+
+Shows errors in Blade
+
+@error('name')
+    <span class="text-danger">{{ $message }}</span>
+@enderror
+
+
+✔ No extra config needed
+
+PART 5️⃣ — AUTH ERRORS (401)
+🔹 Customize Unauthenticated Response
+
+📄 Handler.php
+
+use Illuminate\Auth\AuthenticationException;
+
+protected function unauthenticated($request, AuthenticationException $exception)
+{
+    if ($request->expectsJson()) {
+        return response()->json([
+            'message' => 'Unauthenticated'
+        ], 401);
+    }
+
+    return redirect()->guest(route('login'));
+}
+
+
+✔ Web → login page
+✔ API → JSON
+
+PART 6️⃣ — STANDARD API ERROR FORMAT (BEST PRACTICE 🔥)
+
+Use a consistent structure:
+
+{
+  "success": false,
+  "message": "Error message",
+  "errors": []
+}
+
+
+Example helper:
+
+function apiError($message, $code = 400, $errors = [])
+{
+    return response()->json([
+        'success' => false,
+        'message' => $message,
+        'errors' => $errors
+    ], $code);
+}
