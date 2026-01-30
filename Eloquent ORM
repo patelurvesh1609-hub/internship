@@ -1,0 +1,107 @@
+PART 1️⃣ — CREATING MODELS
+1️⃣ Create a Model (Basic)
+
+php artisan make:model User
+
+app/Models/User.php
+
+2️⃣ Model with Migration
+
+php artisan make:model Post -m
+
+app/Models/Post.php
+database/migrations/xxxx_xx_xx_create_posts_table.php
+
+3️⃣ Model with Controller + Migration
+php artisan make:model Product -mc
+
+app/Models/Product.php
+app/Http/Controllers/ProductController.php
+database/migrations/xxxx_xx_xx_create_products_table.php
+
+4️⃣ Basic Model Structure
+
+app/Models/Post.php
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Post extends Model
+{
+    protected $table = 'posts';   // optional if same name
+    protected $fillable = ['title', 'content'];
+}
+
+PART 2️⃣ — ACTIVE RECORD PATTERN
+
+Model = Data + Database Logic
+
+🔁 With Active Record (Eloquent) 
+
+$post = new Post();
+$post->title = "Hello";
+$post->content = "World";
+$post->save();
+
+1️⃣ Insert Data (Create)
+Post::create([
+    'title' => 'First Post',
+    'content' => 'Laravel Active Record'
+]);
+
+2️⃣ Read Data (Select)
+
+$posts = Post::all();          // SELECT * FROM posts
+$post  = Post::find(1);       // SELECT WHERE id=1
+
+3️⃣ Update Data
+
+$post = Post::find(1);
+$post->title = "Updated Title";
+$post->save();
+
+4️⃣ Delete Data
+
+$post = Post::find(1);
+$post->delete();
+
+PART 3️⃣ — ACTIVE RECORD IN CONTROLLER
+
+app/Http/Controllers/PostController.php
+
+use App\Models\Post;
+
+class PostController extends Controller
+{
+    public function store()
+    {
+        Post::create([
+            'title' => 'New Post',
+            'content' => 'Active Record Example'
+        ]);
+
+        return "Post Saved";
+    }
+
+    public function index()
+    {
+        $posts = Post::all();
+        return view('posts', compact('posts'));
+    }
+}
+
+PART 4️⃣ — ACTIVE RECORD RELATIONSHIPS
+🔹 One to Many
+class User extends Model
+{
+    public function posts()
+    {
+        return $this->hasMany(Post::class);
+    }
+}
+
+$user = User::find(1);
+$user->posts;
