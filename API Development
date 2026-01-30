@@ -1,0 +1,139 @@
+PART 1️⃣ — CREATE MODEL & MIGRATION 
+
+1️⃣ Create Model + Migration
+php artisan make:model Product -m
+
+📄 Files Created
+
+app/Models/Product.php
+database/migrations/xxxx_xx_xx_create_products_table.php
+
+📄 Migration
+Schema::create('products', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->decimal('price', 8, 2);
+    $table->timestamps();
+});
+
+php artisan migrate
+
+PART 2️⃣ — CREATE API RESOURCE
+
+2️⃣ Create Resource Class
+php artisan make:resource ProductResource
+
+
+📄 File Created
+
+app/Http/Resources/ProductResource.php
+
+📄 ProductResource.php
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class ProductResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id'    => $this->id,
+            'name'  => $this->name,
+            'price' => $this->price,
+            'created_at' => $this->created_at->toDateTimeString(),
+        ];
+    }
+}
+
+PART 3️⃣ — CREATE API CONTROLLER
+
+3️⃣ Create Controller
+php artisan make:controller Api/ProductController
+
+app/Http/Controllers/Api/ProductController.php
+
+📄 ProductController.php
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Models\Product;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductResource;
+use Illuminate\Http\Request;
+
+class ProductController extends Controller
+{
+    // GET: /api/products
+    public function index()
+    {
+        return ProductResource::collection(Product::all());
+    }
+
+    // GET: /api/products/{id}
+    public function show(Product $product)
+    {
+        return new ProductResource($product);
+    }
+
+    // POST: /api/products
+    public function store(Request $request)
+    {
+        $product = Product::create($request->all());
+
+        return new ProductResource($product);
+    }
+}
+
+PART 4️⃣ — DEFINE API ROUTES
+
+routes/api.php
+
+use App\Http\Controllers\Api\ProductController;
+
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products/{product}', [ProductController::class, 'show']);
+Route::post('/products', [ProductController::class, 'store']);
+
+
+📌 Base URL:
+
+http://127.0.0.1:8000/api/products
+
+PART 5️⃣ — RESOURCE COLLECTION (PAGINATION 🔥)
+return ProductResource::collection(
+    Product::paginate(10)
+);
+
+
+PART 6️⃣ — API RESPONSE FORMAT (OUTPUT)
+🔹 Single Product
+{
+  "id": 1,
+  "name": "Laptop",
+  "price": "55000.00",
+  "created_at": "2026-01-30 14:20:00"
+}
+
+🔹 Product List
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Laptop",
+      "price": "55000.00"
+    }
+  ]
+}
+
+PART 7️⃣ — CONDITIONAL FIELDS (ADVANCED 🔥)
+return [
+    'id' => $this->id,
+    'name' => $this->name,
+    'price' => $this->price,
+    'admin_only' => $this->when(auth()->user()?->is_admin, 'secret'),
+];
