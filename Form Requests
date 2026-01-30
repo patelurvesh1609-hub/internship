@@ -1,0 +1,92 @@
+STEP 1️⃣ Create Request Class
+📌 Command
+php artisan make:request StorePostRequest
+
+app/Http/Requests/StorePostRequest.php
+
+STEP 2️⃣ Request Class Structure
+
+app/Http/Requests/StorePostRequest.php
+
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class StorePostRequest extends FormRequest
+{
+    // Authorization logic
+    public function authorize()
+    {
+        return true; // allow request
+    }
+
+    // Validation rules
+    public function rules()
+    {
+        return [
+            'title'   => 'required|min:3',
+            'content' => 'required|min:10',
+        ];
+    }
+}
+
+STEP 3️⃣ Use Request Class in Controller
+
+app/Http/Controllers/PostController.php
+
+use App\Http\Requests\StorePostRequest;
+
+public function store(StorePostRequest $request)
+{
+    Post::create($request->validated());
+
+    return redirect()->route('posts.index');
+}
+
+STEP 4️⃣ Update Request (Edit Form)
+📌 Create another Request
+php artisan make:request UpdatePostRequest
+
+app/Http/Requests/UpdatePostRequest.php
+
+class UpdatePostRequest extends FormRequest
+{
+    public function authorize()
+    {
+        return true;
+    }
+
+    public function rules()
+    {
+        return [
+            'title'   => 'required|min:3',
+            'content' => 'required|min:10',
+        ];
+    }
+}
+
+Use in Controller
+use App\Http\Requests\UpdatePostRequest;
+
+public function update(UpdatePostRequest $request, Post $post)
+{
+    $post->update($request->validated());
+    return redirect()->route('posts.index');
+}
+
+STEP 5️⃣ Custom Validation Messages (Optional 🔥)
+public function messages()
+{
+    return [
+        'title.required' => 'Title is mandatory',
+        'content.required' => 'Content cannot be empty',
+    ];
+}
+
+STEP 6️⃣ Authorization Logic (Very Important)
+public function authorize()
+{
+    return auth()->check(); // only logged users
+}
