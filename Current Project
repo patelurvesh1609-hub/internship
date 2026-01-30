@@ -1,0 +1,149 @@
+🗓️ Today’s Focus
+
+PART 1️⃣ — DEBUGGING ELOQUENT QUERIES
+🔹 Why Debug Eloquent Queries?
+
+Slow pages
+
+Wrong data showing
+
+N+1 problem
+
+Unexpected joins / conditions
+
+1️⃣ dd() / dump() (Quick Debug)
+
+ Controller
+
+$users = User::all();
+dd($users);
+
+2️⃣ toSql() — SEE THE RAW SQL 🔥
+$query = User::where('status', 1);
+dd($query->toSql());
+
+Output
+select * from `users` where `status` = ?
+
+3️⃣ getBindings() — SEE VALUES
+dd($query->getBindings());
+
+4️⃣ Full SQL with Bindings (MOST USEFUL 🔥)
+$query = User::where('email', 'test@gmail.com');
+
+$sql = vsprintf(
+    str_replace('?', '%s', $query->toSql()),
+    $query->getBindings()
+);
+
+dd($sql);
+
+5️⃣ Enable Query Log (Multiple Queries)
+\DB::enableQueryLog();
+
+$users = User::with('roles')->get();
+
+dd(\DB::getQueryLog());
+
+6️⃣ Debug N+1 Problem (Real Example)
+
+$users = User::with('roles')->get();
+
+7️⃣ Laravel Debugbar (DEV TOOL 🔥)
+composer require barryvdh/laravel-debugbar --dev
+
+PART 2️⃣ — REFINING TABLE UI (BLADE)
+
+1️⃣ Basic Table (Before)
+<table>
+@foreach($users as $user)
+<tr>
+<td>{{ $user->name }}</td>
+<td>{{ $user->email }}</td>
+</tr>
+@endforeach
+</table>
+
+2️⃣ Clean Table with Bootstrap / Tailwind
+<table class="table table-bordered table-striped">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        @foreach($users as $user)
+        <tr>
+            <td>{{ $loop->iteration }}</td>
+            <td>{{ $user->name }}</td>
+            <td>{{ $user->email }}</td>
+            <td>{{ $user->created_at->format('d M Y') }}</td>
+        </tr>
+        @endforeach
+    </tbody>
+</table>
+
+3️⃣ Handling Empty Data (IMPORTANT 🔥)
+@forelse($users as $user)
+<tr>
+    <td>{{ $user->name }}</td>
+</tr>
+@empty
+<tr>
+    <td colspan="4" class="text-center">No records found</td>
+</tr>
+@endforelse
+
+4️⃣ Pagination-Friendly Tables
+
+📄 Controller
+
+$users = User::paginate(10);
+
+
+📄 Blade
+
+{{ $users->links() }}
+
+5️⃣ Reusable Table Component (ADVANCED 🔥)
+
+📄 resources/views/components/table.blade.php
+
+<table class="table table-hover">
+    <thead>{{ $head }}</thead>
+    <tbody>{{ $slot }}</tbody>
+</table>
+
+
+📄 Usage
+
+<x-table>
+    <x-slot name="head">
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+        </tr>
+    </x-slot>
+
+    @foreach($users as $user)
+    <tr>
+        <td>{{ $user->name }}</td>
+        <td>{{ $user->email }}</td>
+    </tr>
+    @endforeach
+</x-table>
+
+6️⃣ Action Buttons (Edit/Delete)
+<td>
+    <a href="{{ route('users.edit', $user) }}" class="btn btn-sm btn-warning">Edit</a>
+
+    <form method="POST" action="{{ route('users.destroy', $user) }}" class="d-inline">
+        @csrf
+        @method('DELETE')
+        <button class="btn btn-sm btn-danger">Delete</button>
+    </form>
+</td>
