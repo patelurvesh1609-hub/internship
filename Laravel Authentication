@@ -1,0 +1,176 @@
+PART 1️⃣ — BUILT-IN AUTH SYSTEM (FAST SETUP)
+
+1️⃣ Install Laravel Breeze
+
+📌 Command
+composer require laravel/breeze --dev
+
+php artisan breeze:install
+
+
+Choose:
+
+Blade
+
+
+Then run:
+
+php artisan migrate
+npm install
+npm run dev
+
+2️⃣ Files Automatically Created (IMPORTANT 🔥)
+📁 Auth Controllers
+app/Http/Controllers/Auth/
+ ├── AuthenticatedSessionController.php
+ ├── RegisteredUserController.php
+ ├── PasswordResetLinkController.php
+ ├── NewPasswordController.php
+
+📁 Auth Requests (Validation)
+app/Http/Requests/Auth/
+ ├── LoginRequest.php
+ ├── RegisterRequest.php
+
+📁 Views
+resources/views/auth/
+ ├── login.blade.php
+ ├── register.blade.php
+ ├── forgot-password.blade.php
+
+📁 Routes
+routes/auth.php
+
+
+Loaded automatically in:
+
+routes/web.php
+
+3️⃣ Default Login Flow (Behind the Scenes)
+Login Form
+ ↓
+LoginRequest (validation)
+ ↓
+AuthenticatedSessionController
+ ↓
+Auth::attempt()
+ ↓
+Session created
+ ↓
+Redirect to dashboard
+
+PART 2️⃣ — UNDERSTANDING DEFAULT LOGIN LOGIC
+
+app/Http/Controllers/Auth/AuthenticatedSessionController.php
+
+public function store(LoginRequest $request)
+{
+    $request->authenticate();
+    $request->session()->regenerate();
+
+    return redirect()->intended(RouteServiceProvider::HOME);
+}
+
+app/Http/Requests/Auth/LoginRequest.php
+
+public function rules()
+{
+    return [
+        'email' => ['required', 'email'],
+        'password' => ['required'],
+    ];
+}
+
+PART 3️⃣ — CUSTOM LOGIN LOGIC (IMPORTANT 🔥)
+
+ Login Only Active Users
+app/Http/Requests/Auth/LoginRequest.php
+
+public function authenticate()
+{
+    if (! Auth::attempt([
+        'email' => $this->email,
+        'password' => $this->password,
+        'status' => 1
+    ])) {
+        throw ValidationException::withMessages([
+            'email' => 'Invalid credentials or inactive account.',
+        ]);
+    }
+}
+
+ Custom Username Login (Instead of Email)
+
+public function rules()
+{
+    return [
+        'username' => ['required'],
+        'password' => ['required'],
+    ];
+}
+
+ Authenticate Logic
+Auth::attempt([
+    'username' => $this->username,
+    'password' => $this->password,
+]);
+
+ Role-Based Login Redirect
+
+app/Http/Controllers/Auth/AuthenticatedSessionController.php
+
+if (auth()->user()->role === 'admin') {
+    return redirect('/admin/dashboard');
+}
+
+return redirect('/dashboard');
+
+PART 4️⃣ — PROTECT ROUTES USING AUTH
+
+routes/web.php
+
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', function () {
+        return view('dashboard');
+    });
+});
+
+PART 5️⃣ — CUSTOM LOGIN (WITHOUT BREEZE) 🔥
+
+If interviewer asks manual auth logic 👇
+
+1️⃣ Create Controller
+php artisan make:controller AuthController
+
+app/Http/Controllers/AuthController.php
+
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
+
+class AuthController extends Controller
+{
+    public function login(Request $request)
+    {
+        $credentials = $request->only('email', 'password');
+
+        if (Auth::attempt($credentials)) {
+            return redirect('/dashboard');
+
+}
+
+        return back()->withErrors(['email' => 'Invalid login']);
+    }
+
+    public function logout()
+    {
+        Auth::logout();
+        return redirect('/login');
+    }
+}
+
+2️⃣ Routes
+
+ routes/web.php
+
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout']);
