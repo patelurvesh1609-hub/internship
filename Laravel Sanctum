@@ -1,0 +1,132 @@
+PART 1️⃣ — INSTALL SANCTUM
+
+1️⃣ Install Package
+composer require laravel/sanctum
+
+2️⃣ Publish Config & Migration
+php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
+php artisan migrate
+
+📄 Table created
+
+personal_access_tokens
+
+3️⃣ Add Middleware (API)
+
+app/Http/Kernel.php
+
+Ensure this exists in api middleware group:
+
+'api' => [
+    \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+    'throttle:api',
+    \Illuminate\Routing\Middleware\SubstituteBindings::class,
+],
+
+4️⃣ User Model Setup
+
+app/Models/User.php
+
+use Laravel\Sanctum\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasApiTokens;
+}
+
+PART 2️⃣ — AUTH API ENDPOINTS (LOGIN / REGISTER)
+
+5️⃣ Create Auth Controller
+php artisan make:controller Api/AuthController
+
+app/Http/Controllers/Api/AuthController.php
+
+🔹 Register API
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+
+public function register(Request $request)
+{
+    $request->validate([
+        'name' => 'required',
+        'email' => 'required|email|unique:users',
+        'password' => 'required|min:6',
+    ]);
+
+    $user = User::create([
+        'name' => $request->name,
+        'email' => $request->email,
+        'password' => Hash::make($request->password),
+    ]);
+
+    $token = $user->createToken('mobile')->plainTextToken;
+
+    return response()->json([
+        'token' => $token,
+        'user' => $user,
+    ]);
+}
+
+🔹 Login API
+use Illuminate\Support\Facades\Auth;
+
+public function login(Request $request)
+{
+    if (!Auth::attempt($request->only('email', 'password'))) {
+        return response()->json(['message' => 'Invalid credentials'], 401);
+    }
+
+    $user = Auth::user();
+    $token = $user->createToken('mobile')->plainTextToken;
+
+    return response()->json([
+        'token' => $token,
+        'user' => $user,
+    ]);
+}
+
+🔹 Logout API
+public function logout(Request $request)
+{
+    $request->user()->currentAccessToken()->delete();
+
+    return response()->json(['message' => 'Logged out']);
+}
+
+PART 3️⃣ — API ROUTES (PROTECTED)
+
+routes/api.php
+
+use App\Http\Controllers\Api\AuthController;
+
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::get('/profile', function (Request $request) {
+        return $request->user();
+    });
+});
+
+PART 4️⃣ — USING TOKEN FROM MOBILE / SPA
+🔹 API Request Header (IMPORTANT 🔥)
+Authorization: Bearer YOUR_TOKEN_HERE
+
+
+Example (Postman / Flutter / React):
+GET /api/profile
+Authorization: Bearer 1|jdsf98sdf98sdf...
+
+PART 5️⃣ — TOKEN PERMISSIONS (ADVANCED 🔥)
+Create Token with Ability
+$token = $user->createToken('mobile', ['order:create'])->plainTextToken;
+
+Check Ability in Route
+Route::get('/orders', function (Request $request) {
+    if (!$request->user()->tokenCan('order:create')) {
+        abort(403);
+    }
+});
