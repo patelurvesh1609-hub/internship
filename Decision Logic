@@ -1,0 +1,80 @@
+Decision Logic in Controller (if / else)
+
+public function checkAge($age)
+{
+    if ($age >= 18) {
+        return "Eligible to vote";
+    } else {
+        return "Not eligible";
+    }
+}
+
+if / else if / else in Controller
+
+public function grade($marks)
+{
+    if ($marks >= 90) {
+        return "Grade A";
+    } elseif ($marks >= 75) {
+        return "Grade B";
+    } elseif ($marks >= 50) {
+        return "Grade C";
+    } else {
+        return "Fail";
+    }
+}
+
+
+Decision Logic in Blade (@if)
+
+@if($user)
+    <p>Welcome, {{ $user }}</p>
+@else
+    <p>Welcome, Guest</p>
+@endif
+
+
+@elseif Example (Blade)
+
+@if($marks >= 90)
+    <p>Grade A</p>
+@elseif($marks >= 75)
+    <p>Grade B</p>
+@elseif($marks >= 50)
+    <p>Grade C</p>
+@else
+    <p>Fail</p>
+@endif
+
+
+@switch in Blade
+
+@switch($day)
+    @case(1)
+        <p>Monday</p>
+        @break
+
+    @case(2)
+        <p>Tuesday</p>
+        @break
+
+    @default
+        <p>Invalid day</p>
+@endswitch
+
+
+Ternary Operator in Blade
+
+<p>{{ $isLogin ? 'Login Success' : 'Please Login' }}</p>
+
+Decision Logic with Request Data
+
+public function login(Request $request)
+{
+    if ($request->username == 'admin' && $request->password == '123') {
+        return "Login Successful";
+    } else {
+        return "Invalid Credentials";
+    }
+}
+
