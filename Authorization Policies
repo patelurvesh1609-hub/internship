@@ -1,0 +1,101 @@
+PART 1️⃣ — USING GATES (SIMPLE RULES)
+
+1️⃣ Define Gate
+
+app/Providers/AuthServiceProvider.php
+
+use Illuminate\Support\Facades\Gate;
+
+public function boot()
+{
+    Gate::define('access-admin', function ($user) {
+        return $user->role === 'admin';
+    });
+}
+
+2️⃣ Use Gate in Controller
+
+app/Http/Controllers/AdminController.php
+
+use Illuminate\Support\Facades\Gate;
+
+public function dashboard()
+{
+    if (Gate::denies('access-admin')) {
+        abort(403);
+    }
+
+    return "Admin Dashboard";
+}
+
+3️⃣ Use Gate in Blade
+@can('access-admin')
+    <a href="/admin">Admin Panel</a>
+@endcan
+
+4️⃣ Use Gate in Route
+
+📄 routes/web.php
+
+Route::get('/admin', function () {
+    return "Admin Page";
+})->middleware('can:access-admin');
+
+PART 2️⃣ — USING POLICIES (MODEL-BASED AUTH)
+
+1️⃣ Create Policy
+
+📌 Command
+php artisan make:policy PostPolicy --model=Post
+
+app/Policies/PostPolicy.php
+
+2️⃣ Define Policy Rules
+
+app/Policies/PostPolicy.php
+
+use App\Models\User;
+use App\Models\Post;
+
+class PostPolicy
+{
+    public function update(User $user, Post $post)
+    {
+        return $user->id === $post->user_id;
+    }
+
+    public function delete(User $user, Post $post)
+    {
+        return $user->id === $post->user_id;
+    }
+}
+
+3️⃣ Register Policy
+
+app/Providers/AuthServiceProvider.php
+
+protected $policies = [
+    Post::class => PostPolicy::class,
+];
+
+4️⃣ Use Policy in Controller
+
+app/Http/Controllers/PostController.php
+
+public function edit(Post $post)
+{
+    $this->authorize('update', $post);
+    return view('posts.edit', compact('post'));
+}
+
+5️⃣ Use Policy in Blade
+@can('update', $post)
+    <a href="{{ route('posts.edit', $post) }}">Edit</a>
+@endcan
+
+6️⃣ Policy via Middleware
+
+📄 routes/web.php
+
+Route::delete('/posts/{post}', [PostController::class, 'destroy'])
+    ->middleware('can:delete,post');
