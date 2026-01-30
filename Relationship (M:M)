@@ -1,0 +1,128 @@
+PART 1️⃣ — CREATE MODELS & MIGRATIONS
+
+1️⃣ Create User Model (Already Exists)
+
+app/Models/User.php
+
+2️⃣ Create Role Model + Migration
+
+📌 Command
+php artisan make:model Role -m
+
+app/Models/Role.php
+database/migrations/xxxx_xx_xx_create_roles_table.php
+
+📄 Migration
+Schema::create('roles', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->timestamps();
+});
+
+3️⃣ Create Pivot Table Migration (IMPORTANT 🔥)
+
+📌 Command
+php artisan make:migration create_role_user_table
+
+database/migrations/xxxx_xx_xx_create_role_user_table.php
+
+Schema::create('role_user', function (Blueprint $table) {
+    $table->id();
+
+    $table->foreignId('user_id')
+          ->constrained()
+          ->onDelete('cascade');
+
+    $table->foreignId('role_id')
+          ->constrained()
+          ->onDelete('cascade');
+});
+
+php artisan migrate
+
+PART 2️⃣ — DEFINE RELATIONSHIPS IN MODELS
+
+4️⃣ User Model (belongsToMany)
+
+app/Models/User.php
+
+use App\Models\Role;
+
+public function roles()
+{
+    return $this->belongsToMany(Role::class);
+}
+
+5️⃣ Role Model (belongsToMany)
+
+app/Models/Role.php
+
+use App\Models\User;
+
+class Role extends Model
+{
+    protected $fillable = ['name'];
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class);
+    }
+}
+
+PART 3️⃣ — USING THE MANY-TO-MANY RELATIONSHIP
+
+6️⃣ Attach Roles to User
+$user = User::find(1);
+$user->roles()->attach(1); // role_id = 1
+
+7️⃣ Attach Multiple Roles
+$user->roles()->attach([1, 2, 3]);
+
+8️⃣ Sync Roles (MOST USED 🔥)
+$user->roles()->sync([2, 3]);
+
+9️⃣ Detach Role
+$user->roles()->detach(1);
+
+🔟 Get Roles of a User
+$user = User::find(1);
+
+foreach ($user->roles as $role) {
+    echo $role->name;
+}
+
+🔟 Get Users of a Role
+$role = Role::find(1);
+
+foreach ($role->users as $user) {
+    echo $user->name;
+}
+
+PART 4️⃣ — CONTROLLER EXAMPLE
+
+app/Http/Controllers/UserRoleController.php
+
+use App\Models\User;
+use App\Models\Role;
+
+class UserRoleController extends Controller
+{
+    public function assignRole()
+    {
+        $user = User::find(1);
+        $user->roles()->sync([1, 2]);
+
+        return "Roles Assigned";
+    }
+}
+
+PART 5️⃣ — PIVOT TABLE WITH EXTRA COLUMNS (ADVANCED 🔥)
+
+$table->timestamp('assigned_at')->nullable();
+
+return $this->belongsToMany(Role::class)
+            ->withPivot('assigned_at');
+
+foreach ($user->roles as $role) {
+    echo $role->pivot->assigned_at;
+}
