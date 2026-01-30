@@ -1,0 +1,143 @@
+PART 1️⃣ — FACTORIES (DATA BLUEPRINT)
+
+1️⃣ Create a Model + Factory
+📌 Command
+php artisan make:model Post -mf
+
+
+📄 Files Created
+
+app/Models/Post.php
+database/factories/PostFactory.php
+
+2️⃣ Define Factory Fields
+
+database/factories/PostFactory.php
+
+<?php
+
+namespace Database\Factories;
+
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+class PostFactory extends Factory
+{
+    public function definition()
+    {
+        return [
+            'title'   => fake()->sentence(6),
+            'content' => fake()->paragraph(5),
+            'status'  => fake()->randomElement(['draft', 'published']),
+            'created_at' => fake()->dateTimeBetween('-1 year'),
+        ];
+    }
+}
+
+PART 2️⃣ — SEEDERS (RUN FACTORIES)
+
+3️⃣ Create Seeder
+php artisan make:seeder PostSeeder
+
+
+📄 File Created
+
+database/seeders/PostSeeder.php
+
+4️⃣ Use Factory in Seeder
+
+📄 PostSeeder.php
+
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Post;
+use Illuminate\Database\Seeder;
+
+class PostSeeder extends Seeder
+{
+    public function run()
+    {
+        Post::factory()->count(500)->create();
+    }
+}
+
+
+✔ Generates 500 records
+
+5️⃣ Register Seeder
+
+database/seeders/DatabaseSeeder.php
+
+public function run()
+{
+    $this->call(PostSeeder::class);
+}
+
+6️⃣ Run Seeder
+php artisan db:seed
+
+
+Or fresh DB:
+
+php artisan migrate:fresh --seed
+
+PART 3️⃣ — RELATIONAL DATA (ADVANCED 🔥)
+database/factories/UserFactory.php
+
+return [
+    'name' => fake()->name(),
+    'email' => fake()->unique()->safeEmail(),
+];
+
+Post Factory (Link User)
+database/factories/PostFactory.php
+
+use App\Models\User;
+
+return [
+    'user_id' => User::factory(),
+    'title' => fake()->sentence(),
+];
+
+Seeder (Large Dataset)
+User::factory()
+    ->count(50)
+    ->hasPosts(20)
+    ->create();
+
+
+🔥 Creates:
+
+50 users
+
+1000 posts
+
+PART 4️⃣ — CONDITIONAL STATES (VERY IMPORTANT 🔥)
+Define States in Factory
+public function published()
+{
+    return $this->state([
+        'status' => 'published',
+    ]);
+}
+
+Use State in Seeder
+Post::factory()->count(100)->published()->create();
+
+PART 5️⃣ — SEEDING MULTIPLE TABLES
+
+📄 DatabaseSeeder.php
+
+public function run()
+{
+    $this->call([
+        UserSeeder::class,
+        PostSeeder::class,
+        ProductSeeder::class,
+    ]);
+}
+
+PART 6️⃣ — PERFORMANCE TIPS (LARGE DATASETS 🔥)
+
+Post::factory()->count(10000)->create();
