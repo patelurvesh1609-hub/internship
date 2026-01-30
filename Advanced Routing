@@ -1,0 +1,130 @@
+routes/web.php
+
+Route::group([], function () {
+    Route::get('/about', function () {
+        return "About Page";
+    });
+
+    Route::get('/contact', function () {
+        return "Contact Page";
+    });
+});
+
+
+routes/web.php
+
+Route::prefix('admin')->group(function () {
+
+    Route::get('/dashboard', function () {
+        return "Admin Dashboard";
+    });
+
+    Route::get('/users', function () {
+        return "Admin Users";
+    });
+
+});
+
+routes/web.php
+
+Route::middleware('auth')->group(function () {
+
+    Route::get('/profile', function () {
+        return "User Profile";
+    });
+
+    Route::get('/settings', function () {
+        return "User Settings";
+    });
+
+});
+
+routes/web.php
+
+Route::prefix('admin')
+    ->middleware('auth')
+    ->group(function () {
+
+        Route::get('/dashboard', function () {
+            return "Admin Dashboard";
+        });
+
+        Route::get('/reports', function () {
+            return "Admin Reports";
+        });
+
+    });
+
+
+Final URLs
+/admin/dashboard
+/admin/reports
+
+app/Http/Middleware/IsAdmin.php
+
+public function handle($request, Closure $next)
+{
+    if (auth()->user()->role !== 'admin') {
+        abort(403, 'Unauthorized');
+    }
+
+    return $next($request);
+}
+
+
+app/Http/Kernel.php
+
+protected $routeMiddleware = [
+    'isAdmin' => \App\Http\Middleware\IsAdmin::class,
+];
+
+
+routes/web.php
+
+use App\Http\Controllers\AdminController;
+Route::prefix('admin')
+    ->middleware(['auth', 'isAdmin'])
+    ->group(function () {
+
+        Route::get('/dashboard', function () {
+            return "Admin Dashboard";
+        });
+
+        Route::get('/users', function () {
+            return "Manage Users";
+        });
+
+    });
+
+app/Http/Controllers/AdminController.php
+
+class AdminController extends Controller
+{
+    public function dashboard()
+    {
+        return "Admin Dashboard";
+    }
+
+    public function users()
+    {
+        return "Admin Users";
+    }
+}
+
+routes/api.php
+
+Route::prefix('v1')
+    ->middleware('auth:sanctum')
+    ->group(function () {
+
+        Route::get('/users', function () {
+            return "API Users";
+        });
+
+        Route::get('/orders', function () {
+            return "API Orders";
+        });
+
+    });
+
+
