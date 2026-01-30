@@ -1,0 +1,138 @@
+web.php
+
+use App\Http\Controllers\ArrayController;
+
+Route::get('/array-all', [ArrayController::class, 'allInOne']);
+
+ArrayController.php
+
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+
+class ArrayController extends Controller
+{
+    public function allInOne()
+    {
+        // Indexed Array
+        $numbers = [40, 10, 30, 20];
+
+        // Associative Array
+        $marks = [
+            "Amit" => 85,
+            "Neha" => 92,
+            "Raj"  => 78
+        ];
+
+        // Multidimensional Array
+        $students = [
+            ["name" => "Amit", "age" => 22],
+            ["name" => "Neha", "age" => 21],
+        ];
+
+        // Built-in Sorting
+        $ascNumbers = $numbers;
+        sort($ascNumbers);
+
+        $descNumbers = $numbers;
+        rsort($descNumbers);
+
+        $sortByValue = $marks;
+        asort($sortByValue);
+
+        $sortByKey = $marks;
+        ksort($sortByKey);
+
+        // Custom Sorting Logic (Ascending)
+        $customSort = $numbers;
+        for ($i = 0; $i < count($customSort); $i++) {
+            for ($j = $i + 1; $j < count($customSort); $j++) {
+                if ($customSort[$i] > $customSort[$j]) {
+                    $temp = $customSort[$i];
+                    $customSort[$i] = $customSort[$j];
+                    $customSort[$j] = $temp;
+                }
+            }
+        }
+
+        return view('array-all', compact(
+            'numbers',
+            'marks',
+            'students',
+            'ascNumbers',
+            'descNumbers',
+            'sortByValue',
+            'sortByKey',
+            'customSort'
+        ));
+    }
+}
+
+resources/views/array-all.blade.php
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Arrays & Sorting - All In One</title>
+</head>
+<body>
+
+<h2>1️⃣ Indexed Array</h2>
+@foreach($numbers as $num)
+    {{ $num }}
+@endforeach
+
+<hr>
+
+<h2>2️⃣ Ascending Sort</h2>
+@foreach($ascNumbers as $num)
+    {{ $num }}
+@endforeach
+
+<hr>
+
+<h2>3️⃣ Descending Sort</h2>
+@foreach($descNumbers as $num)
+    {{ $num }}
+@endforeach
+
+<hr>
+
+<h2>4️⃣ Associative Array (Marks)</h2>
+@foreach($marks as $name => $mark)
+    {{ $name }} : {{ $mark }} <br>
+@endforeach
+
+<hr>
+
+<h2>5️⃣ Sort by VALUE (asort)</h2>
+@foreach($sortByValue as $name => $mark)
+    {{ $name }} : {{ $mark }} <br>
+@endforeach
+
+<hr>
+
+<h2>6️⃣ Sort by KEY (ksort)</h2>
+@foreach($sortByKey as $name => $mark)
+    {{ $name }} : {{ $mark }} <br>
+@endforeach
+
+<hr>
+
+<h2>7️⃣ Multidimensional Array</h2>
+@foreach($students as $student)
+    Name: {{ $student['name'] }},
+    Age: {{ $student['age'] }} <br>
+@endforeach
+
+<hr>
+
+<h2>8️⃣ Custom Sorting Logic (Without sort())</h2>
+@foreach($customSort as $num)
+    {{ $num }}
+@endforeach
+
+</body>
+</html>
