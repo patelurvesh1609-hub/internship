@@ -1,0 +1,127 @@
+PART 1️⃣ — CREATE FORM REQUEST CLASS
+1️⃣ Generate Request Class
+php artisan make:request StoreUserRequest
+
+📄 File Created
+
+app/Http/Requests/StoreUserRequest.php
+
+PART 2️⃣ — BASIC STRUCTURE
+
+📄 StoreUserRequest.php
+
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class StoreUserRequest extends FormRequest
+{
+    // Authorization check
+    public function authorize()
+    {
+        return true; // or custom logic
+    }
+
+    // Validation rules
+    public function rules()
+    {
+        return [
+            'name'     => 'required|string|min:3',
+            'email'    => 'required|email|unique:users,email',
+            'password' => 'required|min:8|confirmed',
+        ];
+    }
+}
+
+PART 3️⃣ — USE FORM REQUEST IN CONTROLLER
+
+📄 Controller
+
+app/Http/Controllers/UserController.php
+
+use App\Http\Requests\StoreUserRequest;
+
+public function store(StoreUserRequest $request)
+{
+    // Only validated data
+    $data = $request->validated();
+
+    User::create($data);
+
+    return redirect()->back()->with('success', 'User created');
+}
+
+PART 4️⃣ — COMPLEX VALIDATION RULES 🔥
+1️⃣ Conditional Validation
+public function rules()
+{
+    return [
+        'type' => 'required',
+        'company_name' => 'required_if:type,business',
+    ];
+}
+
+2️⃣ Unique Rule (Update Case)
+use Illuminate\Validation\Rule;
+
+public function rules()
+{
+    return [
+        'email' => [
+            'required',
+            'email',
+            Rule::unique('users')->ignore($this->user),
+        ],
+    ];
+}
+
+3️⃣ Array Validation
+'items' => 'required|array',
+'items.*.name' => 'required|string',
+'items.*.qty' => 'required|integer|min:1',
+
+4️⃣ Custom Regex Rule
+'phone' => ['required', 'regex:/^[6-9]\d{9}$/'],
+
+PART 5️⃣ — CUSTOM ERROR MESSAGES
+public function messages()
+{
+    return [
+        'email.required' => 'Email is mandatory',
+        'password.min' => 'Password must be at least 8 characters',
+    ];
+}
+
+PART 6️⃣ — CUSTOM ATTRIBUTE NAMES
+public function attributes()
+{
+    return [
+        'email' => 'Email Address',
+        'password' => 'Account Password',
+    ];
+}
+
+PART 7️⃣ — AUTHORIZATION LOGIC 🔐 (VERY IMPORTANT)
+public function authorize()
+{
+    return auth()->check() && auth()->user()->is_admin;
+}
+
+PART 8️⃣ — API VALIDATION RESPONSE (ADVANCED)
+
+Override failed validation for APIs:
+
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
+
+protected function failedValidation(Validator $validator)
+{
+    throw new HttpResponseException(
+        response()->json([
+            'success' => false,
+            'errors' => $validator->errors(),
+        ], 422)
+    );
+}
