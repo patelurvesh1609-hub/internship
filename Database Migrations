@@ -1,0 +1,100 @@
+PART 1️⃣ — CREATING TABLES
+
+1️⃣ Create Migration File
+php artisan make:migration create_users_table
+
+📄 File Created
+
+database/migrations/2026_02_09_000000_create_users_table.php
+
+2️⃣ Migration Structure
+
+database/migrations/*_create_users_table.php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+
+    public function up()
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->timestamps();
+        });
+    }
+
+    public function down()
+    {
+        Schema::dropIfExists('users');
+    }
+};
+
+3️⃣ Run Migration
+php artisan migrate
+
+PART 2️⃣ — COMMON COLUMN TYPES (IMPORTANT 🔥)
+
+$table->string('title');
+$table->text('description');
+$table->integer('age');
+$table->boolean('status')->default(true);
+$table->decimal('price', 8, 2);
+$table->date('dob');
+$table->timestamp('email_verified_at')->nullable();
+
+PART 3️⃣ — MODIFYING EXISTING TABLES
+4️⃣ Add New Column
+📌 Command
+php artisan make:migration add_phone_to_users_table
+
+database/migrations/*_add_phone_to_users_table.php
+
+Schema::table('users', function (Blueprint $table) {
+    $table->string('phone')->nullable()->after('email');
+});
+
+5️⃣ Drop Column
+Schema::table('users', function (Blueprint $table) {
+    $table->dropColumn('phone');
+});
+
+6️⃣ Rename Column (IMPORTANT)
+Schema::table('users', function (Blueprint $table) {
+    $table->renameColumn('phone', 'mobile');
+});
+
+PART 4️⃣ — MODIFY COLUMN TYPE
+Schema::table('users', function (Blueprint $table) {
+    $table->string('email', 150)->change();
+});
+
+PART 5️⃣ — FOREIGN KEYS & RELATIONS
+7️⃣ Add Foreign Key
+Schema::create('posts', function (Blueprint $table) {
+    $table->id();
+    $table->string('title');
+
+    $table->foreignId('user_id')
+          ->constrained()
+          ->onDelete('cascade');
+
+    $table->timestamps();
+});
+
+8️⃣ Drop Foreign Key
+$table->dropForeign(['user_id']);
+
+PART 6️⃣ — INDEXES & CONSTRAINTS
+$table->unique('email');
+$table->index('status');
+$table->primary('id');
+
+PART 7️⃣ — ROLLING BACK MIGRATIONS
+php artisan migrate:rollback     // last batch
+php artisan migrate:reset        // all migrations
+php artisan migrate:refresh      // rollback + migrate
+php artisan migrate:fresh        // drop all tables + migrate
