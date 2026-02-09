@@ -1,0 +1,137 @@
+PART 1️⃣ — CREATE RESOURCE CONTROLLER
+1️⃣ Create Model + Migration + Resource Controller
+php artisan make:model Product -mcr
+
+📄 Files Created
+app/Models/Product.php
+app/Http/Controllers/ProductController.php
+database/migrations/xxxx_create_products_table.php
+
+2️⃣ Migration Example
+
+📄 database/migrations/*_create_products_table.php
+
+Schema::create('products', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->decimal('price', 8, 2);
+    $table->timestamps();
+});
+
+php artisan migrate
+
+PART 2️⃣ — DEFINE RESOURCE ROUTES (IMPORTANT 🔥)
+
+📄 routes/web.php
+
+use App\Http\Controllers\ProductController;
+
+Route::resource('products', ProductController::class);
+
+🔹 Resource Routes Mapping
+HTTP	URL	Controller Method	Purpose
+GET	/products	index	List all records
+GET	/products/create	create	Show create form
+POST	/products	store	Save new record
+GET	/products/{product}	show	Show single record
+GET	/products/{product}/edit	edit	Show edit form
+PUT/PATCH	/products/{product}	update	Update record
+DELETE	/products/{product}	destroy	Delete record
+PART 3️⃣ — RESOURCE CONTROLLER METHODS
+
+📄 app/Http/Controllers/ProductController.php
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Product;
+use Illuminate\Http\Request;
+
+class ProductController extends Controller
+{
+    // 1️⃣ List all products
+    public function index()
+    {
+        $products = Product::all();
+        return view('products.index', compact('products'));
+    }
+
+    // 2️⃣ Show create form
+    public function create()
+    {
+        return view('products.create');
+    }
+
+    // 3️⃣ Store new product
+    public function store(Request $request)
+    {
+        Product::create($request->all());
+        return redirect()->route('products.index');
+    }
+
+    // 4️⃣ Show single product
+    public function show(Product $product)
+    {
+        return view('products.show', compact('product'));
+    }
+
+    // 5️⃣ Show edit form
+    public function edit(Product $product)
+    {
+        return view('products.edit', compact('product'));
+    }
+
+    // 6️⃣ Update product
+    public function update(Request $request, Product $product)
+    {
+        $product->update($request->all());
+        return redirect()->route('products.index');
+    }
+
+    // 7️⃣ Delete product
+    public function destroy(Product $product)
+    {
+        $product->delete();
+        return redirect()->route('products.index');
+    }
+}
+
+PART 4️⃣ — MODEL CONFIGURATION (IMPORTANT)
+
+📄 app/Models/Product.php
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Product extends Model
+{
+    protected $fillable = ['name', 'price'];
+}
+
+PART 5️⃣ — BLADE VIEW STRUCTURE
+resources/views/products/
+ ├── index.blade.php
+ ├── create.blade.php
+ ├── edit.blade.php
+ └── show.blade.php
+
+🔹 Example: index.blade.php
+<a href="{{ route('products.create') }}">Add Product</a>
+
+@foreach($products as $product)
+    <p>
+        {{ $product->name }} - ₹{{ $product->price }}
+
+        <a href="{{ route('products.edit', $product) }}">Edit</a>
+
+        <form method="POST" action="{{ route('products.destroy', $product) }}">
+            @csrf
+            @method('DELETE')
+            <button>Delete</button>
+        </form>
+    </p>
+@endforeach
