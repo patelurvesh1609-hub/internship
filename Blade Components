@@ -1,0 +1,163 @@
+PART 1️⃣ — ANONYMOUS COMPONENT (Simple & Fast)
+1️⃣ Create Component File
+
+resources/views/components/button.blade.php
+
+2️⃣ Add Slot + Attributes
+
+📄 button.blade.php
+
+<button {{ $attributes->merge(['class' => 'btn btn-primary']) }}>
+    {{ $slot }}
+</button>
+
+3️⃣ Use It
+<x-button>
+    Save
+</x-button>
+
+<x-button class="btn-danger">
+    Delete
+</x-button>
+
+PART 2️⃣ — COMPONENT WITH PROPS
+1️⃣ Create Alert Component
+
+📁resources/views/components/alert.blade.php
+
+📄 alert.blade.php
+
+@props(['type' => 'success'])
+
+<div class="alert alert-{{ $type }}">
+    {{ $slot }}
+</div>
+
+2️⃣ Use Component
+<x-alert type="danger">
+    Invalid credentials!
+</x-alert>
+
+PART 3️⃣ — NAMED SLOTS (ADVANCED 🔥)
+1️⃣ Create Card Component
+
+📁resources/views/components/card.blade.php
+
+📄 card.blade.php
+
+<div class="card shadow p-3">
+    <div class="card-header">
+        {{ $header }}
+    </div>
+
+    <div class="card-body">
+        {{ $slot }}
+    </div>
+
+    @isset($footer)
+        <div class="card-footer">
+            {{ $footer }}
+        </div>
+    @endisset
+</div>
+
+2️⃣ Use Named Slots
+<x-card>
+    <x-slot name="header">
+        Product Details
+    </x-slot>
+
+    This is the product description.
+
+    <x-slot name="footer">
+        <x-button>Buy Now</x-button>
+    </x-slot>
+</x-card>
+
+PART 4️⃣ — CLASS-BASED COMPONENT (More Powerful)
+1️⃣ Create Component
+php artisan make:component Badge
+
+
+📄 Files created:
+
+app/View/Components/Badge.php
+resources/views/components/badge.blade.php
+
+2️⃣ Component Class
+
+📄 Badge.php
+
+namespace App\View\Components;
+
+use Illuminate\View\Component;
+
+class Badge extends Component
+{
+    public $color;
+
+    public function __construct($color = 'primary')
+    {
+        $this->color = $color;
+    }
+
+    public function render()
+    {
+        return view('components.badge');
+    }
+}
+
+3️⃣ Blade View
+
+📄 badge.blade.php
+
+<span class="badge bg-{{ $color }}">
+    {{ $slot }}
+</span>
+
+4️⃣ Usage
+<x-badge color="success">Active</x-badge>
+<x-badge color="danger">Inactive</x-badge>
+
+PART 5️⃣ — ATTRIBUTE MERGING (VERY IMPORTANT 🔥)
+<button {{ $attributes->merge([
+    'class' => 'px-4 py-2 rounded bg-blue-500 text-white'
+]) }}>
+    {{ $slot }}
+</button>
+
+
+Usage:
+
+<x-button class="bg-red-500">
+    Delete
+</x-button>
+
+PART 6️⃣ — LAYOUT COMPONENT (PRO LEVEL 🔥)
+
+📁resources/views/components/layout.blade.php
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ $title ?? 'App' }}</title>
+</head>
+<body>
+
+<header>Navbar</header>
+
+<main>
+    {{ $slot }}
+</main>
+
+<footer>Footer</footer>
+
+</body>
+</html>
+
+
+Usage:
+
+<x-layout title="Dashboard">
+    <h1>Welcome User</h1>
+</x-layout>
