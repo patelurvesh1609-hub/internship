@@ -1,0 +1,161 @@
+PART 1️⃣ — CREATE MODEL & MIGRATION
+1️⃣ Create Product Model
+php artisan make:model Product -m
+
+📄 Files created:
+
+app/Models/Product.php
+database/migrations/*_create_products_table.php
+
+2️⃣ Migration Example
+
+📄 database/migrations/*_create_products_table.php
+
+Schema::create('products', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->decimal('price', 8, 2);
+    $table->text('description')->nullable();
+    $table->timestamps();
+});
+
+php artisan migrate
+
+PART 2️⃣ — CREATE API RESOURCE
+3️⃣ Generate Resource
+php artisan make:resource ProductResource
+
+📄 File:
+
+app/Http/Resources/ProductResource.php
+
+4️⃣ Define JSON Structure
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class ProductResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id'          => $this->id,
+            'name'        => $this->name,
+            'price'       => number_format($this->price, 2),
+            'description' => $this->description,
+            'created_at'  => $this->created_at->format('Y-m-d'),
+        ];
+    }
+}
+
+PART 3️⃣ — CREATE API CONTROLLER
+5️⃣ Create Controller
+php artisan make:controller Api/ProductController --api
+
+📄 File:
+
+app/Http/Controllers/Api/ProductController.php
+
+6️⃣ Implement RESTful Methods
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Models\Product;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductResource;
+use Illuminate\Http\Request;
+
+class ProductController extends Controller
+{
+    // GET /api/products
+    public function index()
+    {
+        return ProductResource::collection(Product::paginate(10));
+    }
+
+    // POST /api/products
+    public function store(Request $request)
+    {
+        $product = Product::create($request->all());
+
+        return new ProductResource($product);
+    }
+
+    // GET /api/products/{id}
+    public function show(Product $product)
+    {
+        return new ProductResource($product);
+    }
+
+    // PUT /api/products/{id}
+    public function update(Request $request, Product $product)
+    {
+        $product->update($request->all());
+
+        return new ProductResource($product);
+    }
+
+    // DELETE /api/products/{id}
+    public function destroy(Product $product)
+    {
+        $product->delete();
+
+        return response()->json([
+            'message' => 'Product deleted successfully'
+        ], 200);
+    }
+}
+
+PART 4️⃣ — DEFINE API ROUTES
+
+📄 routes/api.php
+
+use App\Http\Controllers\Api\ProductController;
+
+Route::apiResource('products', ProductController::class);
+
+
+PART 5️⃣ — SAMPLE API RESPONSES
+🔹 GET /api/products
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Laptop",
+      "price": "55000.00",
+      "description": "Gaming laptop",
+      "created_at": "2026-02-16"
+    }
+  ],
+  "links": {...},
+  "meta": {...}
+}
+
+🔹 POST Response
+{
+  "id": 10,
+  "name": "Phone",
+  "price": "20000.00",
+  "description": "Android phone",
+  "created_at": "2026-02-16"
+}
+
+PART 6️⃣ — ADD VALIDATION (BEST PRACTICE 🔥)
+
+Use Form Request:
+
+php artisan make:request StoreProductRequest
+
+
+Then:
+
+public function store(StoreProductRequest $request)
+{
+    $product = Product::create($request->validated());
+
+    return new ProductResource($product);
+}
