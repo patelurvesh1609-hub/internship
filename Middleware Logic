@@ -1,0 +1,122 @@
+PART 1️⃣ — PREPARE DATABASE
+1️⃣ Add Role Column to Users Table
+
+📄 Migration
+
+php artisan make:migration add_role_to_users_table
+
+📄 database/migrations/*_add_role_to_users_table.php
+
+Schema::table('users', function (Blueprint $table) {
+    $table->string('role')->default('user');
+});
+
+php artisan migrate
+
+2️⃣ Example User Roles in Database
+id	name	role
+1	John	admin
+2	Mike	user
+PART 2️⃣ — CREATE CUSTOM MIDDLEWARE
+3️⃣ Generate Middleware
+php artisan make:middleware RoleMiddleware
+
+📄 File Created
+
+app/Http/Middleware/RoleMiddleware.php
+
+4️⃣ Add Role Logic
+
+📄 RoleMiddleware.php
+
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+
+class RoleMiddleware
+{
+    public function handle(Request $request, Closure $next, ...$roles)
+    {
+        if (!auth()->check()) {
+            return redirect('/login');
+        }
+
+        if (!in_array(auth()->user()->role, $roles)) {
+            abort(403, 'Unauthorized Access');
+        }
+
+        return $next($request);
+    }
+}
+
+PART 3️⃣ — REGISTER MIDDLEWARE
+
+📄 File
+
+app/Http/Kernel.php
+
+
+Add in $routeMiddleware:
+
+'role' => \App\Http\Middleware\RoleMiddleware::class,
+
+PART 4️⃣ — APPLY MIDDLEWARE TO ROUTES
+5️⃣ Admin-Only Routes
+
+📄 routes/web.php
+
+Route::middleware(['auth', 'role:admin'])
+    ->prefix('admin')
+    ->group(function () {
+
+        Route::get('/dashboard', function () {
+            return "Admin Dashboard";
+        });
+
+    });
+
+6️⃣ User-Only Routes
+Route::middleware(['auth', 'role:user'])
+    ->group(function () {
+
+        Route::get('/profile', function () {
+            return "User Profile";
+        });
+
+    });
+
+7️⃣ Multiple Roles Allowed
+Route::middleware(['auth', 'role:admin,user'])
+    ->get('/common', function () {
+        return "Accessible by Admin & User";
+    });
+
+PART 5️⃣ — CONTROLLER-LEVEL MIDDLEWARE
+
+📄 Controller
+
+public function __construct()
+{
+    $this->middleware(['auth', 'role:admin']);
+}
+
+PART 6️⃣ — SHOW/HIDE IN BLADE
+@if(auth()->user()->role === 'admin')
+    <a href="/admin/dashboard">Admin Panel</a>
+@endif
+
+
+Or create helper:
+
+function isAdmin() {
+    return auth()->check() && auth()->user()->role === 'admin';
+}
+
+PART 7️⃣ — OPTIONAL: USE ENUM (ADVANCED 🔥)
+
+Instead of string:
+
+$table->enum('role', ['admin', 'user'])->default('user');
