@@ -1,0 +1,151 @@
+PART 1️⃣ — CONFIGURE SMTP
+🔹 1️⃣ Update .env File
+
+📄 .env
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_app_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=your_email@gmail.com
+MAIL_FROM_NAME="Laravel App"
+
+🔹 Gmail Setup (Important 🔥)
+
+Enable 2-Step Verification
+
+Generate App Password
+
+Use that password in MAIL_PASSWORD
+
+🔹 Clear Config Cache
+php artisan config:clear
+php artisan cache:clear
+
+
+PART 2️⃣ — CREATE A MAILABLE CLASS
+🔹 2️⃣ Generate Mailable
+php artisan make:mail OrderConfirmation
+
+
+📄 Files Created:
+
+app/Mail/OrderConfirmation.php
+resources/views/emails/order_confirmation.blade.php
+
+PART 3️⃣ — DEFINE MAILABLE LOGIC
+📄 app/Mail/OrderConfirmation.php
+<?php
+
+namespace App\Mail;
+
+use Illuminate\Mail\Mailable;
+
+class OrderConfirmation extends Mailable
+{
+    public $order;
+
+    public function __construct($order)
+    {
+        $this->order = $order;
+    }
+
+    public function build()
+    {
+        return $this->subject('Order Confirmation')
+                    ->view('emails.order_confirmation');
+    }
+}
+
+PART 4️⃣ — CREATE EMAIL TEMPLATE
+📄 resources/views/emails/order_confirmation.blade.php
+<h2>Order Confirmed 🎉</h2>
+
+<p>Hello {{ $order->user->name }},</p>
+
+<p>Your order #{{ $order->id }} has been placed successfully.</p>
+
+<p>Total Amount: ₹{{ $order->total }}</p>
+
+<p>Thank you for shopping with us!</p>
+
+PART 5️⃣ — SEND EMAIL FROM CONTROLLER
+📄 app/Http/Controllers/OrderController.php
+use App\Mail\OrderConfirmation;
+use Illuminate\Support\Facades\Mail;
+
+public function store(Request $request)
+{
+    $order = Order::create([...]);
+
+    Mail::to($order->user->email)
+        ->send(new OrderConfirmation($order));
+
+    return back()->with('success', 'Order placed & email sent!');
+}
+
+PART 6️⃣ — AUTOMATED EMAILS (EVENT-BASED 🔥)
+
+Instead of sending manually, send after:
+
+Registration
+
+Order placement
+
+Password reset
+
+Status update
+
+Example: Send After User Registration
+
+📄 app/Providers/EventServiceProvider.php
+
+protected $listen = [
+    Registered::class => [
+        SendEmailVerificationNotification::class,
+    ],
+];
+
+
+Or manually in Register controller.
+
+PART 7️⃣ — QUEUE EMAILS (VERY IMPORTANT 🔥)
+
+Sending emails directly slows response.
+
+Use Queue:
+
+1️⃣ Implement Queue in Mailable
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class OrderConfirmation extends Mailable implements ShouldQueue
+
+2️⃣ Configure Queue
+
+📄 .env
+
+QUEUE_CONNECTION=database
+
+php artisan queue:table
+php artisan migrate
+php artisan queue:work
+
+PART 8️⃣ — MARKDOWN MAIL (PRO LOOK 🔥)
+php artisan make:mail InvoiceMail --markdown=emails.invoice
+
+
+Creates styled email template automatically.
+
+📄 Example:
+
+return $this->markdown('emails.invoice')
+            ->subject('Invoice')
+            ->with(['invoice' => $this->invoice]);
+
+
+PART 9️⃣ — ATTACHMENTS (OPTIONAL)
+return $this->subject('Invoice')
+            ->view('emails.invoice')
+            ->attach(storage_path('app/invoice.pdf'));
