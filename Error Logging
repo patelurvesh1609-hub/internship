@@ -1,0 +1,232 @@
+Below is a **real-world Laravel setup** for **custom exception handling + log monitoring** (perfect for internship “real-world project” points). I’ll keep it practical for your Real Estate system (Admin/Agent/User).
+
+---
+
+## 1) Customize Exception Handling (Laravel 12)
+
+In Laravel 12, most customization is done in **`bootstrap/app.php`** using `->withExceptions(...)`.
+
+### ✅ `bootstrap/app.php` (add this block)
+
+```php
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+
+return Application::configure(basePath: dirname(__DIR__))
+    // ...
+    ->withExceptions(function (Exceptions $exceptions) {
+
+        // Report: log extra context
+        $exceptions->report(function (Throwable $e) {
+            Log::error('Unhandled exception', [
+                'exception' => get_class($e),
+                'message'   => $e->getMessage(),
+                // keep trace out of production logs if you want
+            ]);
+        });
+
+        // Render: JSON for API requests (or Ajax)
+        $exceptions->render(function (Throwable $e, Request $request) {
+
+            if ($request->expectsJson()) {
+                $status = $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
+
+                return response()->json([
+                    'success' => false,
+                    'message' => app()->isProduction()
+                        ? 'Something went wrong. Please try again.'
+                        : $e->getMessage(),
+                ], $status);
+            }
+
+            return null; // let Laravel default render for web
+        });
+
+        // Optional: custom 404 view
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, Request $request) {
+            if (!$request->expectsJson()) {
+                return response()->view('errors.404', [], 404);
+            }
+            return null;
+        });
+
+    })->create();
+```
+
+✅ This gives:
+
+* detailed logs (report)
+* proper JSON errors for API/Ajax
+* custom 404 page for web
+
+---
+
+## 2) Create Custom Error Pages (Clean UI)
+
+Create:
+
+```
+resources/views/errors/404.blade.php
+resources/views/errors/500.blade.php
+resources/views/errors/403.blade.php
+```
+
+### ✅ Example `resources/views/errors/404.blade.php`
+
+```blade
+@extends('layouts.auth', ['title' => 'Page Not Found'])
+
+@section('content')
+<div class="card" style="padding:22px; text-align:center;">
+  <h2 style="margin:0 0 6px;">404 - Page Not Found</h2>
+  <p class="muted" style="margin:0 0 14px;">The page you’re looking for doesn’t exist.</p>
+
+  <a class="btn btn-primary" href="{{ url('/') }}">Go Home</a>
+</div>
+@endsection
+```
+
+*(Use your dashboard CSS if you want.)*
+
+---
+
+## 3) Create Your Own “Business Exception” (Real-world)
+
+Example: prevent agent from editing another agent’s property.
+
+### ✅ `app/Exceptions/ForbiddenActionException.php`
+
+```php
+<?php
+
+namespace App\Exceptions;
+
+use Exception;
+
+class ForbiddenActionException extends Exception
+{
+    public function __construct(string $message = 'You are not allowed to perform this action.')
+    {
+        parent::__construct($message, 403);
+    }
+}
+```
+
+Use in service/controller:
+
+```php
+throw new \App\Exceptions\ForbiddenActionException();
+```
+
+---
+
+## 4) Log Important Events (Admin/Agent actions)
+
+### ✅ Example logs inside services
+
+```php
+use Illuminate\Support\Facades\Log;
+
+Log::info('Property created', [
+  'property_id' => $property->id,
+  'agent_id' => auth()->id(),
+]);
+```
+
+### ✅ Log login/logout (optional)
+
+In controller:
+
+```php
+Log::info('User login', ['user_id' => $user->id, 'role' => $user->role]);
+```
+
+---
+
+## 5) Monitoring Logs (How to View Logs Properly)
+
+### ✅ Laravel log file
+
+Default log location:
+
+```
+storage/logs/laravel.log
+```
+
+### ✅ Live log in terminal (Windows PowerShell)
+
+```powershell
+Get-Content .\storage\logs\laravel.log -Wait -Tail 100
+```
+
+### ✅ Live log in CMD
+
+```bat
+type .\storage\logs\laravel.log
+```
+
+### ✅ Clear logs (safe in dev)
+
+Delete file:
+
+```
+storage/logs/laravel.log
+```
+
+Laravel will create again automatically.
+
+---
+
+## 6) Improve Logging Channels (Daily rotation)
+
+Edit `config/logging.php`:
+
+Set default to daily:
+
+```php
+'default' => env('LOG_CHANNEL', 'daily'),
+```
+
+`.env`
+
+```env
+LOG_CHANNEL=daily
+LOG_LEVEL=debug
+```
+
+Now logs rotate per day (better for real-world projects).
+
+---
+
+## 7) Show Friendly Error Messages to Users (Flash)
+
+When catching:
+
+```php
+try {
+   // risky code
+} catch (\Throwable $e) {
+   Log::error('Failed action', ['error' => $e->getMessage()]);
+   return back()->with('error', 'Something went wrong. Please try again.');
+}
+```
+
+And in Blade:
+
+```blade
+@if(session('error'))
+  <div class="alert danger">{{ session('error') }}</div>
+@endif
+```
+
+---
+
+## 8) Best Practice for Internship Report (1–2 lines)
+
+> Implemented centralized exception handling and custom error pages. Integrated structured logging using Laravel logging channels and monitored application logs for debugging, reliability, and maintainability.
+
+---
+
+If you tell me **your Laravel version (you used Laravel 12)** and whether you want **dashboard-style error pages** (admin theme), I can generate the 403/404/500 pages matching your exact CSS layout.
