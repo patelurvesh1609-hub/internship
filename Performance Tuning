@@ -1,0 +1,153 @@
+N+1 happens when you loop items and Laravel runs **1 query for the list + N queries for relations**. Fix it by loading relations **once** using `with()` / `load()` (eager loading). Here’s the real-estate examples you’ll use the most.
+
+---
+
+## 1) The “bad” N+1 example (Properties list)
+
+### ❌ Bad (N+1)
+
+```php
+$properties = Property::latest()->paginate(10);
+
+foreach ($properties as $p) {
+  echo $p->category->name;  // query each time
+  echo $p->agent->name;     // query each time
+}
+```
+
+### ✅ Good (Eager Loading)
+
+```php
+$properties = Property::with(['category', 'agent'])
+    ->latest()
+    ->paginate(10);
+```
+
+---
+
+## 2) Agent dashboard: “My Properties” with category
+
+### ✅ Best practice
+
+```php
+$properties = Property::with('category')
+    ->ownedBy(auth()->id())     // if you have scope
+    ->latest()
+    ->paginate(10);
+```
+
+Blade:
+
+```blade
+{{ $property->category->name }}
+```
+
+No extra queries.
+
+---
+
+## 3) Inquiries list (agent side)
+
+You usually show inquiry + property title + user name.
+
+### ❌ Bad (N+1)
+
+```php
+$inquiries = Inquiry::where('agent_id', auth()->id())->latest()->paginate(10);
+
+foreach ($inquiries as $i) {
+  echo $i->property->title;
+  echo $i->user->name;
+}
+```
+
+### ✅ Good (Eager Loading)
+
+```php
+$inquiries = Inquiry::with(['property:id,title', 'user:id,name'])
+    ->where('agent_id', auth()->id())
+    ->latest()
+    ->paginate(10);
+```
+
+👉 Notice `property:id,title` and `user:id,name` = loads only needed columns (faster).
+
+---
+
+## 4) Property details page (with images + agent + category)
+
+```php
+$property = Property::with([
+    'category:id,name',
+    'agent:id,name,email,phone',
+    'images:id,property_id,image_path,is_primary'
+])->findOrFail($id);
+```
+
+---
+
+## 5) Use `load()` when you already have the model
+
+```php
+$property = Property::findOrFail($id);
+$property->load(['category', 'agent', 'images']);
+```
+
+---
+
+## 6) Eager load counts (very useful for dashboards)
+
+Example: show each agent’s property count
+
+```php
+$agents = User::where('role','agent')
+    ->withCount('properties')
+    ->get();
+```
+
+Blade:
+
+```blade
+{{ $agent->properties_count }}
+```
+
+---
+
+## 7) Prevent missing relation crashes (optional)
+
+Use null-safe:
+
+```blade
+{{ $property->category?->name ?? '-' }}
+```
+
+---
+
+## 8) How to detect N+1 quickly (dev tip)
+
+In `AppServiceProvider::boot()`:
+
+```php
+use Illuminate\Database\Eloquent\Model;
+
+public function boot(): void
+{
+    Model::preventLazyLoading(!app()->isProduction());
+}
+```
+
+Laravel will warn you when you accidentally create N+1.
+
+---
+
+## Your real estate project “best eager loading sets”
+
+* Properties index: `with(['category','agent'])`
+* Agent properties: `with('category')`
+* Admin properties: `with(['category','agent'])`
+* Inquiries: `with(['property','user'])`
+* Property details: `with(['category','agent','images'])`
+
+---
+
+If you paste your exact controller method (properties index or inquiries list), I’ll rewrite it to **remove N+1 + optimize columns** in your current code style.
