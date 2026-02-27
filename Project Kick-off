@@ -1,0 +1,278 @@
+1) Role Middleware (Admin / Agent / User)
+✅ Create middleware
+php artisan make:middleware RoleMiddleware
+✅ app/Http/Middleware/RoleMiddleware.php
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class RoleMiddleware
+{
+    public function handle(Request $request, Closure $next, ...$roles)
+    {
+        if (!Auth::check()) {
+            return redirect()->route('login')->with('error', 'Please login first.');
+        }
+
+        $userRole = Auth::user()->role ?? 'user';
+
+        if (!in_array($userRole, $roles, true)) {
+            abort(403, 'Unauthorized');
+        }
+
+        return $next($request);
+    }
+}
+✅ Register middleware (Laravel 12)
+
+Open: bootstrap/app.php and add middleware alias:
+
+->withMiddleware(function ($middleware) {
+    $middleware->alias([
+        'role' => \App\Http\Middleware\RoleMiddleware::class,
+    ]);
+})
+✅ Use in routes
+Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
+    Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
+});
+
+Route::middleware(['auth', 'role:agent'])->prefix('agent')->group(function () {
+    Route::get('/dashboard', [AgentDashboardController::class, 'index'])->name('agent.dashboard');
+});
+
+Route::middleware(['auth', 'role:user'])->prefix('user')->group(function () {
+    Route::get('/dashboard', [UserDashboardController::class, 'index'])->name('user.dashboard');
+});
+2) Booking / Inquiry System (Real-World Feature)
+✅ Migration
+php artisan make:migration create_inquiries_table
+public function up(): void
+{
+    Schema::create('inquiries', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('property_id')->constrained()->cascadeOnDelete();
+        $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+        $table->foreignId('agent_id')->constrained('users')->cascadeOnDelete(); // agent is also users table
+        $table->string('name');
+        $table->string('email');
+        $table->string('phone')->nullable();
+        $table->text('message')->nullable();
+        $table->enum('status', ['pending','replied','closed'])->default('pending');
+        $table->timestamps();
+    });
+}
+
+Run:
+
+php artisan migrate
+✅ Model
+php artisan make:model Inquiry
+
+app/Models/Inquiry.php
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Inquiry extends Model
+{
+    protected $fillable = [
+        'property_id','user_id','agent_id','name','email','phone','message','status'
+    ];
+
+    public function property() { return $this->belongsTo(Property::class); }
+    public function user() { return $this->belongsTo(User::class, 'user_id'); }
+    public function agent() { return $this->belongsTo(User::class, 'agent_id'); }
+}
+3) Inquiry Controller + Store (User sends inquiry to Agent)
+php artisan make:controller InquiryController
+
+app/Http/Controllers/InquiryController.php
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Inquiry;
+use App\Models\Property;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class InquiryController extends Controller
+{
+    public function store(Request $request, $propertyId)
+    {
+        $property = Property::with('agent')->findOrFail($propertyId);
+
+        $request->validate([
+            'name' => 'required|string|max:100',
+            'email' => 'required|email|max:150',
+            'phone' => 'nullable|string|max:30',
+            'message' => 'nullable|string|max:1000',
+        ]);
+
+        $inquiry = Inquiry::create([
+            'property_id' => $property->id,
+            'user_id'     => Auth::id(),
+            'agent_id'    => $property->agent_id, // IMPORTANT: property must have agent_id column
+            'name'        => $request->name,
+            'email'       => $request->email,
+            'phone'       => $request->phone,
+            'message'     => $request->message,
+            'status'      => 'pending',
+        ]);
+
+        // Optional: send email notification (code below)
+        // \Mail::to($property->agent->email)->send(new \App\Mail\NewInquiryMail($inquiry));
+
+        return back()->with('success', 'Inquiry sent successfully!');
+    }
+}
+✅ Route
+Route::middleware(['auth','role:user'])->post(
+    '/properties/{property}/inquiry',
+    [InquiryController::class, 'store']
+)->name('properties.inquiry');
+4) Button/Form on Property Details Page (Blade)
+
+Put this in property details view:
+
+@if(session('success'))
+  <div class="alert success">{{ session('success') }}</div>
+@endif
+
+<form method="POST" action="{{ route('properties.inquiry', $property->id) }}" class="card" style="padding:16px; margin-top:14px;">
+  @csrf
+
+  <h3 style="margin:0 0 10px;">Send Inquiry</h3>
+
+  <div class="form-grid">
+    <div class="field full">
+      <label>Name</label>
+      <input name="name" value="{{ old('name', auth()->user()->name ?? '') }}" required>
+    </div>
+
+    <div class="field full">
+      <label>Email</label>
+      <input type="email" name="email" value="{{ old('email', auth()->user()->email ?? '') }}" required>
+    </div>
+
+    <div class="field full">
+      <label>Phone</label>
+      <input name="phone" value="{{ old('phone') }}">
+    </div>
+
+    <div class="field full">
+      <label>Message</label>
+      <textarea name="message" rows="4">{{ old('message') }}</textarea>
+    </div>
+
+    <div class="field full">
+      <button class="btn btn-primary" type="submit">Send Inquiry</button>
+    </div>
+  </div>
+</form>
+5) Agent: View Inquiries (Real-world Dashboard Feature)
+✅ Agent route
+Route::middleware(['auth','role:agent'])->prefix('agent')->group(function () {
+    Route::get('/inquiries', [AgentInquiryController::class, 'index'])->name('agent.inquiries');
+    Route::post('/inquiries/{inquiry}/status', [AgentInquiryController::class, 'updateStatus'])->name('agent.inquiries.status');
+});
+✅ Controller
+php artisan make:controller AgentInquiryController
+
+app/Http/Controllers/AgentInquiryController.php
+
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Inquiry;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class AgentInquiryController extends Controller
+{
+    public function index()
+    {
+        $inquiries = Inquiry::with(['property','user'])
+            ->where('agent_id', Auth::id())
+            ->latest()
+            ->paginate(10);
+
+        return view('agent.inquiries.index', compact('inquiries'));
+    }
+
+    public function updateStatus(Request $request, Inquiry $inquiry)
+    {
+        abort_if($inquiry->agent_id !== Auth::id(), 403);
+
+        $request->validate([
+            'status' => 'required|in:pending,replied,closed'
+        ]);
+
+        $inquiry->update(['status' => $request->status]);
+
+        return back()->with('success', 'Status updated.');
+    }
+}
+6) Admin Analytics Dashboard (Counts + Charts-ready)
+
+app/Http/Controllers/AdminDashboardController.php
+
+public function index()
+{
+    $totalUsers  = \App\Models\User::where('role','user')->count();
+    $totalAgents = \App\Models\User::where('role','agent')->count();
+    $totalProps  = \App\Models\Property::count();
+
+    $activeProps = \App\Models\Property::where('status','active')->count();
+    $inactiveProps = \App\Models\Property::where('status','inactive')->count();
+
+    $monthlyProps = \App\Models\Property::selectRaw("DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as total")
+        ->groupBy('month')->orderBy('month','asc')->get();
+
+    return view('admin.dashboard', compact(
+        'totalUsers','totalAgents','totalProps','activeProps','inactiveProps','monthlyProps'
+    ));
+}
+7) (Optional) Email Notification When Inquiry Created
+✅ Mail
+php artisan make:mail NewInquiryMail --markdown=emails.inquiry.new
+
+app/Mail/NewInquiryMail.php
+
+public function __construct(public \App\Models\Inquiry $inquiry) {}
+
+public function build()
+{
+    return $this->subject('New Property Inquiry')
+        ->markdown('emails.inquiry.new');
+}
+
+resources/views/emails/inquiry/new.blade.php
+
+@component('mail::message')
+# New Inquiry Received
+
+**Property:** {{ $inquiry->property->title ?? 'N/A' }}  
+**From:** {{ $inquiry->name }} ({{ $inquiry->email }})  
+**Phone:** {{ $inquiry->phone ?? '-' }}
+
+**Message:**  
+{{ $inquiry->message ?? '-' }}
+
+@component('mail::button', ['url' => route('agent.inquiries')])
+Open Inquiries
+@endcomponent
+
+Thanks,  
+{{ config('app.name') }}
+@endcomponent
