@@ -1,0 +1,181 @@
+1️⃣ Accessors (Formatted / Derived Values)
+
+Accessors allow you to format or calculate values automatically when retrieving data.
+
+📌 Example: Format Price Automatically
+app/Models/Property.php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Casts\Attribute;
+
+class Property extends Model
+{
+    protected $fillable = [
+        'title',
+        'category_id',
+        'agent_id',
+        'price',
+        'description',
+        'address',
+        'city',
+        'status',
+        'image',
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accessors
+    |--------------------------------------------------------------------------
+    */
+
+    // 1️⃣ Format price as currency
+    protected function formattedPrice(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => '₹ ' . number_format($this->price, 2)
+        );
+    }
+
+    // 2️⃣ Capitalize title automatically
+    protected function title(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => ucfirst($value)
+        );
+    }
+
+    // 3️⃣ Full address accessor
+    protected function fullAddress(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->address . ', ' . $this->city
+        );
+    }
+
+    // 4️⃣ Image full URL accessor
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->image
+                ? asset('storage/' . $this->image)
+                : asset('images/no-image.png')
+        );
+    }
+}
+✅ How to Use in Blade
+{{ $property->formatted_price }}
+{{ $property->full_address }}
+<img src="{{ $property->image_url }}">
+
+No formatting needed in controller anymore ✅
+
+✅ 2️⃣ Mutators (Modify Data Before Saving)
+
+Mutators automatically modify data before saving into database.
+
+📌 Example: Always Store Title in Lowercase
+protected function title(): Attribute
+{
+    return Attribute::make(
+        set: fn ($value) => strtolower($value)
+    );
+}
+
+Now:
+
+Property::create(['title' => 'LUXURY VILLA']);
+
+Database will store:
+
+luxury villa
+
+But accessor will show:
+
+Luxury villa
+
+Very clean system 👍
+
+📌 Example: Auto-trim address
+protected function address(): Attribute
+{
+    return Attribute::make(
+        set: fn ($value) => trim($value)
+    );
+}
+✅ 3️⃣ Query Scopes (Reusable Query Logic)
+
+Scopes allow reusable query filters.
+
+📌 Local Scope Example
+
+Add inside Property model:
+
+/*
+|--------------------------------------------------------------------------
+| Query Scopes
+|--------------------------------------------------------------------------
+*/
+
+// Only active properties
+public function scopeActive($query)
+{
+    return $query->where('status', 'active');
+}
+
+// Filter by city
+public function scopeCity($query, $city)
+{
+    return $query->where('city', $city);
+}
+
+// Filter by price range
+public function scopePriceBetween($query, $min, $max)
+{
+    return $query->whereBetween('price', [$min, $max]);
+}
+
+// Belongs to agent
+public function scopeOwnedBy($query, $agentId)
+{
+    return $query->where('agent_id', $agentId);
+}
+✅ How to Use Scopes
+Example 1: Show only active properties
+Property::active()->get();
+Example 2: Filter by city
+Property::active()->city('Ahmedabad')->get();
+Example 3: Price range filter
+Property::active()
+    ->priceBetween(1000000, 5000000)
+    ->get();
+Example 4: Agent dashboard
+Property::ownedBy(Auth::id())->get();
+
+Controller becomes very clean:
+
+$properties = Property::active()->latest()->paginate(10);
+✅ 4️⃣ Advanced Example (Search Scope)
+public function scopeSearch($query, $term)
+{
+    return $query->where(function ($q) use ($term) {
+        $q->where('title', 'like', "%$term%")
+          ->orWhere('city', 'like', "%$term%");
+    });
+}
+
+Use:
+
+Property::active()
+    ->search($request->search)
+    ->paginate(10);
+✅ 5️⃣ Combine Everything (Professional Example)
+$properties = Property::active()
+    ->when($request->city, fn($q) => $q->city($request->city))
+    ->when($request->min && $request->max,
+        fn($q) => $q->priceBetween($request->min, $request->max))
+    ->search($request->search)
+    ->latest()
+    ->paginate(12);
