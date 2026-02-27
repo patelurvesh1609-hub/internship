@@ -1,0 +1,161 @@
+ER Diagram (Entities + Relationships)
+Entities
+
+users
+
+roles (optional; can be enum instead)
+
+categories
+
+properties
+
+property_images (for multiple images)
+
+inquiries (booking/visit request / contact agent)
+
+favorites (user wishlist)
+
+property_status_logs (optional auditing)
+
+Relationships (Cardinality)
+
+Category (1) → (M) Properties
+
+User (Agent) (1) → (M) Properties
+
+Property (1) → (M) PropertyImages
+
+User (Customer) (1) → (M) Inquiries
+
+Property (1) → (M) Inquiries
+
+User (Agent) (1) → (M) Inquiries (inquiry is sent to agent)
+
+User (Customer) (M) ↔ (M) Property through favorites
+
+Normalized Tables (3NF)
+1) users
+
+Stores all system users (Admin/Agent/User).
+
+Field	Type	Key	Notes
+id	bigint	PK	
+name	varchar(100)		
+email	varchar(150)	UQ	
+phone	varchar(30)		nullable
+role	enum('admin','agent','user')		(or role_id FK)
+password	varchar(255)		hashed
+status	enum('active','blocked')		optional
+email_verified_at	timestamp		nullable
+remember_token	varchar(100)		nullable
+created_at	timestamp		
+updated_at	timestamp		
+
+✅ 3NF: all attributes depend on user id only.
+
+2) categories
+Field	Type	Key	Notes
+id	bigint	PK	
+name	varchar(80)	UQ	e.g. Apartment, Villa
+slug	varchar(120)	UQ	
+created_at / updated_at	timestamp		
+3) properties
+
+Core listing table.
+
+Field	Type	Key	Notes
+id	bigint	PK	
+category_id	bigint	FK	→ categories.id
+agent_id	bigint	FK	→ users.id (role=agent)
+title	varchar(150)		
+description	text		
+price	decimal(12,2)		
+area_sqft	int		nullable
+bedrooms	tinyint		nullable
+bathrooms	tinyint		nullable
+address	varchar(255)		
+city	varchar(80)		
+state	varchar(80)		nullable
+pincode	varchar(12)		nullable
+latitude	decimal(10,7)		nullable
+longitude	decimal(10,7)		nullable
+main_image	varchar(255)		optional if using property_images
+status	enum('active','inactive','pending')		
+created_at / updated_at	timestamp		
+
+✅ 3NF: property data depends only on property id. Agent and category are referenced via FK.
+
+4) property_images
+
+(If you want multiple images per property)
+
+Field	Type	Key	Notes
+id	bigint	PK	
+property_id	bigint	FK	→ properties.id
+image_path	varchar(255)		
+is_primary	boolean		default 0
+created_at / updated_at	timestamp		
+
+✅ avoids repeating image columns in properties (normalization).
+
+5) inquiries
+
+User inquiry / booking request to agent for a property.
+
+Field	Type	Key	Notes
+id	bigint	PK	
+property_id	bigint	FK	→ properties.id
+user_id	bigint	FK	→ users.id (role=user)
+agent_id	bigint	FK	→ users.id (role=agent)
+name	varchar(100)		
+email	varchar(150)		
+phone	varchar(30)		nullable
+message	text		nullable
+visit_date	date		nullable (optional)
+status	enum('pending','replied','closed')		
+created_at / updated_at	timestamp		
+
+✅ 3NF: inquiry depends on inquiry id; property/user/agent are FKs.
+
+6) favorites
+
+Many-to-many: Users can favorite many properties.
+
+Field	Type	Key	Notes
+id	bigint	PK	
+user_id	bigint	FK	→ users.id
+property_id	bigint	FK	→ properties.id
+created_at / updated_at	timestamp		
+
+Constraints:
+
+Unique(user_id, property_id) ✅ prevents duplicate favorites
+
+7) property_status_logs (Optional, real-world auditing)
+
+Tracks changes like active → inactive.
+
+Field	Type	Key	Notes
+id	bigint	PK	
+property_id	bigint	FK	
+changed_by	bigint	FK	→ users.id
+old_status	varchar(20)		
+new_status	varchar(20)		
+note	varchar(255)		nullable
+created_at	timestamp		
+ER Diagram Text Layout (for diagram drawing)
+
+Use this when drawing ER:
+
+USERS (id PK)
+1 —— M PROPERTIES (agent_id FK)
+1 —— M INQUIRIES (user_id FK)
+1 —— M INQUIRIES (agent_id FK)
+M —— M PROPERTIES via FAVORITES
+
+CATEGORIES (id PK)
+1 —— M PROPERTIES (category_id FK)
+
+PROPERTIES (id PK)
+1 —— M PROPERTY_IMAGES (property_id FK)
+1 —— M INQUIRIES (property_id FK)
