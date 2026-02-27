@@ -1,0 +1,279 @@
+Recommended Folder Structure
+app/
+  Services/
+    Property/
+      PropertyService.php
+      PropertyImageService.php
+    Inquiry/
+      InquiryService.php
+    User/
+      UserService.php
+  DTO/
+    PropertyData.php
+1) PropertyService (Create/Update/Delete + Status rules)
+✅ app/DTO/PropertyData.php
+<?php
+
+namespace App\DTO;
+
+use Illuminate\Http\Request;
+
+class PropertyData
+{
+    public function __construct(
+        public string $title,
+        public int $category_id,
+        public float $price,
+        public ?string $description,
+        public ?string $address,
+        public ?string $city,
+        public ?int $bedrooms,
+        public ?int $bathrooms,
+        public ?int $area_sqft,
+        public string $status = 'active'
+    ) {}
+
+    public static function fromRequest(Request $request): self
+    {
+        return new self(
+            title: $request->string('title')->toString(),
+            category_id: (int)$request->input('category_id'),
+            price: (float)$request->input('price'),
+            description: $request->input('description'),
+            address: $request->input('address'),
+            city: $request->input('city'),
+            bedrooms: $request->filled('bedrooms') ? (int)$request->input('bedrooms') : null,
+            bathrooms: $request->filled('bathrooms') ? (int)$request->input('bathrooms') : null,
+            area_sqft: $request->filled('area_sqft') ? (int)$request->input('area_sqft') : null,
+            status: $request->input('status', 'active')
+        );
+    }
+
+    public function toArray(): array
+    {
+        return [
+            'title' => $this->title,
+            'category_id' => $this->category_id,
+            'price' => $this->price,
+            'description' => $this->description,
+            'address' => $this->address,
+            'city' => $this->city,
+            'bedrooms' => $this->bedrooms,
+            'bathrooms' => $this->bathrooms,
+            'area_sqft' => $this->area_sqft,
+            'status' => $this->status,
+        ];
+    }
+}
+✅ app/Services/Property/PropertyService.php
+<?php
+
+namespace App\Services\Property;
+
+use App\DTO\PropertyData;
+use App\Models\Property;
+use Illuminate\Support\Facades\DB;
+
+class PropertyService
+{
+    public function __construct(
+        private PropertyImageService $imageService
+    ) {}
+
+    public function create(PropertyData $data, int $agentId, $imageFile = null): Property
+    {
+        return DB::transaction(function () use ($data, $agentId, $imageFile) {
+
+            // Real-world rule: agent can only create "pending" if your system requires admin approval
+            // $payload = array_merge($data->toArray(), ['status' => 'pending']);
+            $payload = $data->toArray();
+
+            $property = Property::create(array_merge($payload, [
+                'agent_id' => $agentId,
+            ]));
+
+            if ($imageFile) {
+                $path = $this->imageService->storeMainImage($imageFile);
+                $property->update(['image' => $path]); // change to your column: image/main_image
+            }
+
+            return $property;
+        });
+    }
+
+    public function update(Property $property, PropertyData $data, $imageFile = null): Property
+    {
+        return DB::transaction(function () use ($property, $data, $imageFile) {
+
+            $property->update($data->toArray());
+
+            if ($imageFile) {
+                // delete old image if exists
+                $this->imageService->replaceMainImage($property->image, $imageFile);
+                $property->update(['image' => $this->imageService->lastStoredPath()]);
+            }
+
+            return $property;
+        });
+    }
+
+    public function delete(Property $property): void
+    {
+        DB::transaction(function () use ($property) {
+            if (!empty($property->image)) {
+                $this->imageService->deleteIfExists($property->image);
+            }
+            $property->delete();
+        });
+    }
+
+    public function changeStatus(Property $property, string $status): Property
+    {
+        $allowed = ['active','inactive','pending'];
+        abort_unless(in_array($status, $allowed, true), 422);
+
+        $property->update(['status' => $status]);
+        return $property;
+    }
+}
+✅ app/Services/Property/PropertyImageService.php
+<?php
+
+namespace App\Services\Property;
+
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+
+class PropertyImageService
+{
+    private ?string $storedPath = null;
+
+    public function storeMainImage(UploadedFile $file): string
+    {
+        $this->storedPath = $file->store('properties', 'public'); // storage/app/public/properties
+        return $this->storedPath;
+    }
+
+    public function replaceMainImage(?string $oldPath, UploadedFile $newFile): void
+    {
+        if ($oldPath) {
+            $this->deleteIfExists($oldPath);
+        }
+        $this->storeMainImage($newFile);
+    }
+
+    public function deleteIfExists(string $path): void
+    {
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+    }
+
+    public function lastStoredPath(): ?string
+    {
+        return $this->storedPath;
+    }
+}
+2) InquiryService (User sends inquiry → agent)
+✅ app/Services/Inquiry/InquiryService.php
+<?php
+
+namespace App\Services\Inquiry;
+
+use App\Models\Inquiry;
+use App\Models\Property;
+
+class InquiryService
+{
+    public function create(Property $property, int $userId, array $payload): Inquiry
+    {
+        // Rule: inquiry always goes to the property agent
+        return Inquiry::create([
+            'property_id' => $property->id,
+            'user_id'     => $userId,
+            'agent_id'    => $property->agent_id,
+            'name'        => $payload['name'],
+            'email'       => $payload['email'],
+            'phone'       => $payload['phone'] ?? null,
+            'message'     => $payload['message'] ?? null,
+            'status'      => 'pending',
+        ]);
+    }
+
+    public function changeStatus(Inquiry $inquiry, int $agentId, string $status): Inquiry
+    {
+        abort_if($inquiry->agent_id !== $agentId, 403);
+
+        $allowed = ['pending','replied','closed'];
+        abort_unless(in_array($status, $allowed, true), 422);
+
+        $inquiry->update(['status' => $status]);
+        return $inquiry;
+    }
+}
+3) Controller Example (Thin Controller)
+✅ app/Http/Controllers/Agent/PropertyController.php
+<?php
+
+namespace App\Http\Controllers\Agent;
+
+use App\DTO\PropertyData;
+use App\Http\Controllers\Controller;
+use App\Models\Property;
+use App\Services\Property\PropertyService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+class PropertyController extends Controller
+{
+    public function __construct(private PropertyService $service) {}
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'title' => 'required|string|max:150',
+            'category_id' => 'required|exists:categories,id',
+            'price' => 'required|numeric|min:0',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        $property = $this->service->create(
+            PropertyData::fromRequest($request),
+            Auth::id(),
+            $request->file('image')
+        );
+
+        return redirect()->route('agent.properties.show', $property->id)
+            ->with('success', 'Property created.');
+    }
+
+    public function update(Request $request, Property $property)
+    {
+        abort_if($property->agent_id !== Auth::id(), 403);
+
+        $request->validate([
+            'title' => 'required|string|max:150',
+            'category_id' => 'required|exists:categories,id',
+            'price' => 'required|numeric|min:0',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        $this->service->update(
+            $property,
+            PropertyData::fromRequest($request),
+            $request->file('image')
+        );
+
+        return back()->with('success', 'Property updated.');
+    }
+
+    public function destroy(Property $property)
+    {
+        abort_if($property->agent_id !== Auth::id(), 403);
+
+        $this->service->delete($property);
+
+        return redirect()->route('agent.properties.index')
+            ->with('success', 'Property deleted.');
+    }
+}
