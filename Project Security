@@ -1,0 +1,926 @@
+app/Jobs/SendWelcomeEmailJob.php
+<?php
+
+namespace App\Jobs;
+
+use App\Mail\WelcomeMail;
+use App\Models\User;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Mail;
+
+class SendWelcomeEmailJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public int $tries = 3;
+    public int $timeout = 120;
+
+    public function __construct(public User $user)
+    {
+    }
+
+    public function handle(): void
+    {
+        Mail::to($this->user->email)->send(new WelcomeMail($this->user));
+    }
+}
+app/Mail/WelcomeMail.php
+<?php
+
+namespace App\Mail;
+
+use App\Models\User;
+use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Queue\SerializesModels;
+
+class WelcomeMail extends Mailable
+{
+    use Queueable, SerializesModels;
+
+    public function __construct(public User $user)
+    {
+    }
+
+    public function build(): self
+    {
+        return $this->subject('Welcome to Real Estate')
+            ->view('emails.welcome');
+    }
+}
+resources/views/emails/welcome.blade.php
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome</title>
+</head>
+<body style="font-family: Arial, sans-serif; background:#f8fafc; padding:30px;">
+    <div style="max-width:600px; margin:0 auto; background:#ffffff; padding:30px; border-radius:12px; border:1px solid #e5e7eb;">
+        <h2 style="margin-top:0;">Welcome, {{ $user->name }}!</h2>
+        <p>Your account has been created successfully.</p>
+        <p>Thank you for joining our Real Estate platform.</p>
+    </div>
+</body>
+</html>
+app/Http/Controllers/AuthController.php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Jobs\SendWelcomeEmailJob;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+
+class AuthController extends Controller
+{
+    public function showLogin()
+    {
+        return view('auth.login');
+    }
+
+    public function showRegister()
+    {
+        return view('auth.register');
+    }
+
+    public function register(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:150', 'unique:users,email'],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'role' => ['required', Rule::in(['user', 'agent'])],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+        ]);
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
+            'role' => $validated['role'],
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        SendWelcomeEmailJob::dispatch($user);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return match ($user->role) {
+            'agent' => redirect()->route('agent.dashboard'),
+            default => redirect()->route('user.dashboard'),
+        };
+    }
+
+    public function login(Request $request)
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        if (!Auth::attempt($credentials, $request->boolean('remember'))) {
+            return back()
+                ->withErrors(['email' => 'Invalid email or password.'])
+                ->onlyInput('email');
+        }
+
+        $request->session()->regenerate();
+
+        return match (Auth::user()->role) {
+            'admin' => redirect()->route('admin.dashboard'),
+            'agent' => redirect()->route('agent.dashboard'),
+            default => redirect()->route('user.dashboard'),
+        };
+    }
+
+    public function logout(Request $request)
+    {
+        Auth::logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login');
+    }
+}
+.env
+QUEUE_CONNECTION=database
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_app_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=your_email@gmail.com
+MAIL_FROM_NAME="Real Estate"
+database/migrations/2026_03_11_000000_create_jobs_table.php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('jobs', function (Blueprint $table) {
+            $table->id();
+            $table->string('queue')->index();
+            $table->longText('payload');
+            $table->unsignedTinyInteger('attempts');
+            $table->unsignedInteger('reserved_at')->nullable();
+            $table->unsignedInteger('available_at');
+            $table->unsignedInteger('created_at');
+        });
+
+        Schema::create('job_batches', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->string('name');
+            $table->integer('total_jobs');
+            $table->integer('pending_jobs');
+            $table->integer('failed_jobs');
+            $table->longText('failed_job_ids');
+            $table->mediumText('options')->nullable();
+            $table->integer('cancelled_at')->nullable();
+            $table->integer('created_at');
+            $table->integer('finished_at')->nullable();
+        });
+
+        Schema::create('failed_jobs', function (Blueprint $table) {
+            $table->id();
+            $table->string('uuid')->unique();
+            $table->text('connection');
+            $table->text('queue');
+            $table->longText('payload');
+            $table->longText('exception');
+            $table->timestamp('failed_at')->useCurrent();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('jobs');
+        Schema::dropIfExists('job_batches');
+        Schema::dropIfExists('failed_jobs');
+    }
+};
+app/Console/Commands/ProcessQueueCommand.php
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+
+class ProcessQueueCommand extends Command
+{
+    protected $signature = 'queue:work-custom';
+    protected $description = 'Run Laravel queue worker';
+
+    public function handle(): int
+    {
+        $this->call('queue:work', [
+            '--tries' => 3,
+            '--timeout' => 120,
+        ]);
+
+        return self::SUCCESS;
+    }
+}
+routes/web.php
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+
+    Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
+    Route::post('/register', [AuthController::class, 'register'])->name('register.post');
+});
+
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+terminal command
+php artisan queue:table
+php artisan queue:batches-table
+php artisan migrate
+php artisan queue:work
+Ensuring CSRF protection and sanitizing all user inputs.
+app/Http/Middleware/SanitizeInput.php
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+
+class SanitizeInput
+{
+    public function handle(Request $request, Closure $next)
+    {
+        $input = $request->all();
+
+        array_walk_recursive($input, function (&$value) {
+            if (is_string($value)) {
+                $value = trim($value);
+                $value = strip_tags($value);
+            }
+        });
+
+        $request->merge($input);
+
+        return $next($request);
+    }
+}
+bootstrap/app.php
+<?php
+
+use App\Http\Middleware\SanitizeInput;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__ . '/../routes/web.php',
+        commands: __DIR__ . '/../routes/console.php',
+        health: '/up',
+    )
+    ->withMiddleware(function (Middleware $middleware) {
+        $middleware->web(append: [
+            SanitizeInput::class,
+        ]);
+    })
+    ->withExceptions(function (Exceptions $exceptions) {
+        //
+    })->create();
+app/Http/Controllers/AuthController.php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Jobs\SendWelcomeEmailJob;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+
+class AuthController extends Controller
+{
+    public function showLogin()
+    {
+        return view('auth.login');
+    }
+
+    public function showRegister()
+    {
+        return view('auth.register');
+    }
+
+    public function register(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email:rfc,dns', 'max:150', 'unique:users,email'],
+            'phone' => ['nullable', 'regex:/^[0-9+\-\s()]+$/', 'max:20'],
+            'role' => ['required', Rule::in(['user', 'agent'])],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+        ]);
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => strtolower($validated['email']),
+            'phone' => $validated['phone'] ?? null,
+            'role' => $validated['role'],
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        SendWelcomeEmailJob::dispatch($user);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return match ($user->role) {
+            'agent' => redirect()->route('agent.dashboard'),
+            default => redirect()->route('user.dashboard'),
+        };
+    }
+
+    public function login(Request $request)
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email:rfc,dns'],
+            'password' => ['required', 'string'],
+        ]);
+
+        if (!Auth::attempt([
+            'email' => strtolower($credentials['email']),
+            'password' => $credentials['password'],
+        ], $request->boolean('remember'))) {
+            return back()
+                ->withErrors(['email' => 'Invalid email or password.'])
+                ->onlyInput('email');
+        }
+
+        $request->session()->regenerate();
+
+        return match (Auth::user()->role) {
+            'admin' => redirect()->route('admin.dashboard'),
+            'agent' => redirect()->route('agent.dashboard'),
+            default => redirect()->route('user.dashboard'),
+        };
+    }
+
+    public function logout(Request $request)
+    {
+        Auth::logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login');
+    }
+}
+app/Http/Controllers/Agent/PropertyController.php
+<?php
+
+namespace App\Http\Controllers\Agent;
+
+use App\Http\Controllers\Controller;
+use App\Models\Category;
+use App\Models\Property;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+
+class PropertyController extends Controller
+{
+    public function index()
+    {
+        $properties = Property::with('category')
+            ->where('user_id', Auth::id())
+            ->latest()
+            ->paginate(10);
+
+        return view('agent.properties.index', compact('properties'));
+    }
+
+    public function create()
+    {
+        $categories = Category::orderBy('name')->get();
+
+        return view('agent.properties.create', compact('categories'));
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:150'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'location' => ['required', 'string', 'max:150'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'category_id' => ['nullable', 'exists:categories,id'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('properties', 'public');
+        }
+
+        $data['user_id'] = Auth::id();
+
+        Property::create($data);
+
+        return redirect()
+            ->route('agent.properties.index')
+            ->with('success', 'Property added successfully.');
+    }
+
+    public function edit(Property $property)
+    {
+        abort_unless($property->user_id === Auth::id(), 403);
+
+        $categories = Category::orderBy('name')->get();
+
+        return view('agent.properties.edit', compact('property', 'categories'));
+    }
+
+    public function update(Request $request, Property $property)
+    {
+        abort_unless($property->user_id === Auth::id(), 403);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:150'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'location' => ['required', 'string', 'max:150'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'category_id' => ['nullable', 'exists:categories,id'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        if ($request->hasFile('image')) {
+            if ($property->image && Storage::disk('public')->exists($property->image)) {
+                Storage::disk('public')->delete($property->image);
+            }
+
+            $data['image'] = $request->file('image')->store('properties', 'public');
+        }
+
+        $property->update($data);
+
+        return redirect()
+            ->route('agent.properties.index')
+            ->with('success', 'Property updated successfully.');
+    }
+
+    public function destroy(Property $property)
+    {
+        abort_unless($property->user_id === Auth::id(), 403);
+
+        if ($property->image && Storage::disk('public')->exists($property->image)) {
+            Storage::disk('public')->delete($property->image);
+        }
+
+        $property->delete();
+
+        return redirect()
+            ->route('agent.properties.index')
+            ->with('success', 'Property deleted successfully.');
+    }
+}
+resources/views/auth/login.blade.php
+@extends('layouts.auth', ['title' => 'Login'])
+
+@section('content')
+<div class="auth-card">
+    <h2>Login</h2>
+    <p class="auth-subtitle">Sign in to continue</p>
+
+    @if($errors->any())
+        <div class="alert alert-danger">
+            @foreach($errors->all() as $error)
+                <div>{{ $error }}</div>
+            @endforeach
+        </div>
+    @endif
+
+    <form action="{{ route('login.post') }}" method="POST" autocomplete="off">
+        @csrf
+
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" name="email" value="{{ old('email') }}" required>
+        </div>
+
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" name="password" required>
+        </div>
+
+        <div class="field checkbox-field">
+            <label>
+                <input type="checkbox" name="remember" value="1"> Remember me
+            </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Login</button>
+    </form>
+</div>
+@endsection
+resources/views/auth/register.blade.php
+@extends('layouts.auth', ['title' => 'Register'])
+
+@section('content')
+<div class="auth-card">
+    <h2>Register</h2>
+    <p class="auth-subtitle">Create your account</p>
+
+    @if($errors->any())
+        <div class="alert alert-danger">
+            @foreach($errors->all() as $error)
+                <div>{{ $error }}</div>
+            @endforeach
+        </div>
+    @endif
+
+    <form action="{{ route('register.post') }}" method="POST" autocomplete="off">
+        @csrf
+
+        <div class="field">
+            <label for="name">Name</label>
+            <input id="name" type="text" name="name" value="{{ old('name') }}" required>
+        </div>
+
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" name="email" value="{{ old('email') }}" required>
+        </div>
+
+        <div class="field">
+            <label for="phone">Phone</label>
+            <input id="phone" type="text" name="phone" value="{{ old('phone') }}">
+        </div>
+
+        <div class="field">
+            <label for="role">Register As</label>
+            <select id="role" name="role" required>
+                <option value="user" {{ old('role') === 'user' ? 'selected' : '' }}>User</option>
+                <option value="agent" {{ old('role') === 'agent' ? 'selected' : '' }}>Agent</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" type="password" name="password" required>
+        </div>
+
+        <div class="field">
+            <label for="password_confirmation">Confirm Password</label>
+            <input id="password_confirmation" type="password" name="password_confirmation" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Register</button>
+    </form>
+</div>
+@endsection
+resources/views/agent/properties/create.blade.php
+@extends('layouts.agent', [
+    'title' => 'Add Property',
+    'pageTitle' => 'Add Property'
+])
+
+@section('content')
+<div class="card form-card">
+    @if($errors->any())
+        <div class="alert alert-danger">
+            <ul class="error-list">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <form action="{{ route('agent.properties.store') }}" method="POST" enctype="multipart/form-data" class="form-grid" autocomplete="off">
+        @csrf
+
+        <div class="field full">
+            <label for="title">Title</label>
+            <input id="title" type="text" name="title" value="{{ old('title') }}" required>
+        </div>
+
+        <div class="field">
+            <label for="price">Price</label>
+            <input id="price" type="number" step="0.01" min="0" name="price" value="{{ old('price') }}" required>
+        </div>
+
+        <div class="field">
+            <label for="location">Location</label>
+            <input id="location" type="text" name="location" value="{{ old('location') }}" required>
+        </div>
+
+        <div class="field">
+            <label for="category_id">Category</label>
+            <select id="category_id" name="category_id">
+                <option value="">Select Category</option>
+                @foreach($categories as $category)
+                    <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>
+                        {{ $category->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="status">Status</label>
+            <select id="status" name="status" required>
+                <option value="active" {{ old('status') === 'active' ? 'selected' : '' }}>Active</option>
+                <option value="inactive" {{ old('status') === 'inactive' ? 'selected' : '' }}>Inactive</option>
+            </select>
+        </div>
+
+        <div class="field full">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="5">{{ old('description') }}</textarea>
+        </div>
+
+        <div class="field full">
+            <label for="image">Image</label>
+            <input id="image" type="file" name="image" accept=".jpg,.jpeg,.png,.webp">
+        </div>
+
+        <div class="field full">
+            <button type="submit" class="btn btn-primary">Save Property</button>
+        </div>
+    </form>
+</div>
+@endsection
+resources/views/agent/properties/edit.blade.php
+@extends('layouts.agent', [
+    'title' => 'Edit Property',
+    'pageTitle' => 'Edit Property'
+])
+
+@section('content')
+<div class="card form-card">
+    @if($errors->any())
+        <div class="alert alert-danger">
+            <ul class="error-list">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <form action="{{ route('agent.properties.update', $property) }}" method="POST" enctype="multipart/form-data" class="form-grid" autocomplete="off">
+        @csrf
+        @method('PUT')
+
+        <div class="field full">
+            <label for="title">Title</label>
+            <input id="title" type="text" name="title" value="{{ old('title', $property->title) }}" required>
+        </div>
+
+        <div class="field">
+            <label for="price">Price</label>
+            <input id="price" type="number" step="0.01" min="0" name="price" value="{{ old('price', $property->price) }}" required>
+        </div>
+
+        <div class="field">
+            <label for="location">Location</label>
+            <input id="location" type="text" name="location" value="{{ old('location', $property->location) }}" required>
+        </div>
+
+        <div class="field">
+            <label for="category_id">Category</label>
+            <select id="category_id" name="category_id">
+                <option value="">Select Category</option>
+                @foreach($categories as $category)
+                    <option value="{{ $category->id }}" {{ old('category_id', $property->category_id) == $category->id ? 'selected' : '' }}>
+                        {{ $category->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="status">Status</label>
+            <select id="status" name="status" required>
+                <option value="active" {{ old('status', $property->status) === 'active' ? 'selected' : '' }}>Active</option>
+                <option value="inactive" {{ old('status', $property->status) === 'inactive' ? 'selected' : '' }}>Inactive</option>
+            </select>
+        </div>
+
+        <div class="field full">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="5">{{ old('description', $property->description) }}</textarea>
+        </div>
+
+        <div class="field full">
+            <label>Current Image</label>
+            <img src="{{ $property->image_url }}" alt="{{ $property->title }}" class="preview-image">
+        </div>
+
+        <div class="field full">
+            <label for="image">Change Image</label>
+            <input id="image" type="file" name="image" accept=".jpg,.jpeg,.png,.webp">
+        </div>
+
+        <div class="field full">
+            <button type="submit" class="btn btn-primary">Update Property</button>
+        </div>
+    </form>
+</div>
+@endsection
+resources/views/agent/properties/index.blade.php
+@extends('layouts.agent', [
+    'title' => 'My Properties',
+    'pageTitle' => 'My Properties'
+])
+
+@section('content')
+<div class="page-actions">
+    <a href="{{ route('agent.properties.create') }}" class="btn btn-primary">
+        <i class="fa-solid fa-plus"></i> Add Property
+    </a>
+</div>
+
+<div class="card table-card">
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Image</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th width="180">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($properties as $property)
+                    <tr>
+                        <td>
+                            <img src="{{ $property->image_url }}" alt="{{ $property->title }}" class="thumb">
+                        </td>
+                        <td>{{ $property->title }}</td>
+                        <td>{{ $property->category->name ?? '-' }}</td>
+                        <td>₹{{ number_format($property->price, 2) }}</td>
+                        <td>{{ $property->location }}</td>
+                        <td>
+                            <span class="badge {{ $property->status === 'active' ? 'badge-success' : 'badge-muted' }}">
+                                {{ ucfirst($property->status) }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-group">
+                                <a href="{{ route('agent.properties.edit', $property) }}" class="btn btn-sm btn-warning">Edit</a>
+
+                                <form action="{{ route('agent.properties.destroy', $property) }}" method="POST" onsubmit="return confirm('Delete this property?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="7" class="empty-state">No properties found.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pagination-wrap">
+        {{ $properties->links() }}
+    </div>
+</div>
+@endsection
+app/Models/User.php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Notifications\Notifiable;
+
+class User extends Authenticatable
+{
+    use HasFactory, Notifiable;
+
+    protected $fillable = [
+        'name',
+        'email',
+        'phone',
+        'role',
+        'password',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
+    }
+}
+routes/web.php
+<?php
+
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Agent\PropertyController;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+
+    Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
+    Route::post('/register', [AuthController::class, 'register'])->name('register.post');
+});
+
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+Route::middleware(['auth'])->prefix('agent')->name('agent.')->group(function () {
+    Route::view('/dashboard', 'agent.dashboard')->name('dashboard');
+    Route::resource('properties', PropertyController::class);
+});
+config/session.php
+<?php
+
+use Illuminate\Support\Str;
+
+return [
+
+    'driver' => env('SESSION_DRIVER', 'database'),
+
+    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+
+    'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
+
+    'encrypt' => env('SESSION_ENCRYPT', true),
+
+    'files' => storage_path('framework/sessions'),
+
+    'connection' => env('SESSION_CONNECTION'),
+
+    'table' => env('SESSION_TABLE', 'sessions'),
+
+    'store' => env('SESSION_STORE'),
+
+    'lottery' => [2, 100],
+
+    'cookie' => env(
+        'SESSION_COOKIE',
+        Str::slug(env('APP_NAME', 'laravel'), '_').'_session'
+    ),
+
+    'path' => env('SESSION_PATH', '/'),
+
+    'domain' => env('SESSION_DOMAIN'),
+
+    'secure' => env('SESSION_SECURE_COOKIE', false),
+
+    'http_only' => env('SESSION_HTTP_ONLY', true),
+
+    'same_site' => env('SESSION_SAME_SITE', 'lax'),
+
+    'partitioned' => env('SESSION_PARTITIONED_COOKIE', false),
+
+];
+.env
+APP_ENV=local
+APP_DEBUG=true
+
+SESSION_DRIVER=database
+SESSION_ENCRYPT=true
+SESSION_HTTP_ONLY=true
+SESSION_SAME_SITE=lax
+SESSION_SECURE_COOKIE=false
