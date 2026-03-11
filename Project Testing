@@ -1,0 +1,132 @@
+1️⃣ tests/Unit/PriceCalculatorTest.php
+<?php
+
+namespace Tests\Unit;
+
+use PHPUnit\Framework\TestCase;
+use App\Services\PriceCalculator;
+
+class PriceCalculatorTest extends TestCase
+{
+    public function test_discount_calculation()
+    {
+        $service = new PriceCalculator();
+
+        $result = $service->applyDiscount(1000, 10);
+
+        $this->assertEquals(900, $result);
+    }
+}
+2️⃣ app/Services/PriceCalculator.php
+<?php
+
+namespace App\Services;
+
+class PriceCalculator
+{
+    public function applyDiscount($price, $discount)
+    {
+        return $price - ($price * $discount / 100);
+    }
+}
+3️⃣ tests/Feature/HomePageTest.php
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+
+class HomePageTest extends TestCase
+{
+    public function test_home_page_loads()
+    {
+        $response = $this->get('/');
+
+        $response->assertStatus(200);
+    }
+}
+4️⃣ tests/Feature/UserRegistrationTest.php
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+class UserRegistrationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_user_can_register()
+    {
+        $response = $this->post('/register', [
+            'name' => 'Urvesh',
+            'email' => 'urvesh@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password'
+        ]);
+
+        $response->assertStatus(302);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'urvesh@example.com'
+        ]);
+    }
+}
+5️⃣ tests/Feature/LoginTest.php
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+class LoginTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_user_can_login()
+    {
+        $user = User::factory()->create([
+            'password' => bcrypt('password')
+        ]);
+
+        $response = $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password'
+        ]);
+
+        $response->assertRedirect('/dashboard');
+    }
+}
+6️⃣ tests/Feature/PropertyTest.php
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use App\Models\User;
+use App\Models\Property;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+class PropertyTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_agent_can_add_property()
+    {
+        $agent = User::factory()->create([
+            'role' => 'agent'
+        ]);
+
+        $response = $this->actingAs($agent)->post('/agent/properties', [
+            'title' => 'Test Property',
+            'price' => 500000
+        ]);
+
+        $this->assertDatabaseHas('properties', [
+            'title' => 'Test Property'
+        ]);
+    }
+}
