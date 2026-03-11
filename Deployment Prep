@@ -1,0 +1,160 @@
+.env.example
+APP_NAME="RealEstate"
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://localhost
+
+LOG_CHANNEL=stack
+LOG_LEVEL=debug
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=real_estate
+DB_USERNAME=root
+DB_PASSWORD=
+
+CACHE_STORE=file
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=public
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS="noreply@realestate.com"
+MAIL_FROM_NAME="${APP_NAME}"
+.env (Development)
+APP_NAME="RealEstate"
+APP_ENV=local
+APP_KEY=base64:GENERATED_KEY
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+LOG_CHANNEL=stack
+LOG_LEVEL=debug
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=real_estate_dev
+DB_USERNAME=root
+DB_PASSWORD=
+
+CACHE_STORE=file
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+
+FILESYSTEM_DISK=public
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=mailtrap_user
+MAIL_PASSWORD=mailtrap_password
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS="noreply@realestate.com"
+MAIL_FROM_NAME="RealEstate Dev"
+.env.production
+APP_NAME="RealEstate"
+APP_ENV=production
+APP_KEY=base64:PRODUCTION_KEY
+APP_DEBUG=false
+APP_URL=https://realestate.com
+
+LOG_CHANNEL=stack
+LOG_LEVEL=error
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=real_estate_prod
+DB_USERNAME=prod_user
+DB_PASSWORD=strong_password
+
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+SESSION_DRIVER=redis
+SESSION_LIFETIME=120
+
+FILESYSTEM_DISK=public
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=redis_password
+REDIS_PORT=6379
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=production_email@gmail.com
+MAIL_PASSWORD=app_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="noreply@realestate.com"
+MAIL_FROM_NAME="RealEstate"
+config/app.php
+'name' => env('APP_NAME', 'Laravel'),
+
+'env' => env('APP_ENV', 'production'),
+
+'debug' => (bool) env('APP_DEBUG', false),
+
+'url' => env('APP_URL', 'http://localhost'),
+config/database.php
+'default' => env('DB_CONNECTION', 'mysql'),
+
+'mysql' => [
+    'driver' => 'mysql',
+    'host' => env('DB_HOST', '127.0.0.1'),
+    'port' => env('DB_PORT', '3306'),
+    'database' => env('DB_DATABASE', 'forge'),
+    'username' => env('DB_USERNAME', 'forge'),
+    'password' => env('DB_PASSWORD', ''),
+    'charset' => 'utf8mb4',
+    'collation' => 'utf8mb4_unicode_ci',
+],
+config/cache.php
+'default' => env('CACHE_STORE', 'file'),
+config/queue.php
+'default' => env('QUEUE_CONNECTION', 'database'),
+config/session.php
+'driver' => env('SESSION_DRIVER', 'database'),
+
+'lifetime' => env('SESSION_LIFETIME', 120),
+config/mail.php
+'default' => env('MAIL_MAILER', 'smtp'),
+
+'from' => [
+    'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
+    'name' => env('MAIL_FROM_NAME', 'Example'),
+],
+Deployment Commands
+composer install --optimize-autoloader --no-dev
+
+php artisan key:generate
+
+php artisan migrate --force
+
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+php artisan optimize
