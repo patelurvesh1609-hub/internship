@@ -1,0 +1,126 @@
+app/Http/Requests/Api/PropertyIndexRequest.php
+<?php
+
+namespace App\Http\Requests\Api;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class PropertyIndexRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'search' => ['nullable', 'string', 'max:150'],
+            'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'min_price' => ['nullable', 'numeric', 'min:0'],
+            'max_price' => ['nullable', 'numeric', 'min:0', 'gte:min_price'],
+            'sort_by' => ['nullable', Rule::in(['latest', 'oldest', 'price_low', 'price_high'])],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ];
+    }
+}
+app/Http/Resources/PropertyResource.php
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class PropertyResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'description' => $this->description,
+            'price' => $this->price,
+            'location' => $this->location,
+            'status' => $this->status,
+            'image_url' => $this->image_url,
+            'category' => $this->whenLoaded('category', function () {
+                return [
+                    'id' => $this->category->id,
+                    'name' => $this->category->name,
+                ];
+            }),
+            'agent' => $this->whenLoaded('user', function () {
+                return [
+                    'id' => $this->user->id,
+                    'name' => $this->user->name,
+                    'email' => $this->user->email,
+                ];
+            }),
+            'created_at' => $this->created_at?->toISOString(),
+            'updated_at' => $this->updated_at?->toISOString(),
+        ];
+    }
+}
+app/Http/Controllers/Api/PropertyController.php
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\PropertyIndexRequest;
+use App\Http\Resources\PropertyResource;
+use App\Models\Property;
+
+class PropertyController extends Controller
+{
+    public function index(PropertyIndexRequest $request)
+    {
+        $perPage = (int) ($request->validated()['per_page'] ?? 10);
+        $sortBy = $request->validated()['sort_by'] ?? 'latest';
+
+        $query = Property::query()
+            ->with(['category:id,name', 'user:id,name,email'])
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $search = trim((string) $request->search);
+
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('title', 'like', "%{$search}%")
+                        ->orWhere('location', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->integer('category_id')))
+            ->when($request->filled('min_price'), fn ($q) => $q->where('price', '>=', $request->min_price))
+            ->when($request->filled('max_price'), fn ($q) => $q->where('price', '<=', $request->max_price));
+
+        $query = match ($sortBy) {
+            'oldest' => $query->oldest(),
+            'price_low' => $query->orderBy('price'),
+            'price_high' => $query->orderByDesc('price'),
+            default => $query->latest(),
+        };
+
+        $properties = $query->paginate($perPage)->appends($request->query());
+
+        return PropertyResource::collection($properties);
+    }
+
+    public function show(Property $property)
+    {
+        $property->load(['category:id,name', 'user:id,name,email']);
+
+        return new PropertyResource($property);
+    }
+}
+routes/api.php
+<?php
+
+use App\Http\Controllers\Api\PropertyController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/properties', [PropertyController::class, 'index']);
+Route::get('/properties/{property}', [PropertyController::class, 'show']);
