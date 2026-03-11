@@ -1,0 +1,899 @@
+app/Http/Controllers/Agent/PropertyController.php
+<?php
+
+namespace App\Http\Controllers\Agent;
+
+use App\Http\Controllers\Controller;
+use App\Models\Property;
+use App\Models\Category;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
+
+class PropertyController extends Controller
+{
+    public function index()
+    {
+        $properties = Property::with('category')
+            ->where('user_id', Auth::id())
+            ->latest()
+            ->paginate(10);
+
+        return view('agent.properties.index', compact('properties'));
+    }
+
+    public function create()
+    {
+        $categories = Category::orderBy('name')->get();
+
+        return view('agent.properties.create', compact('categories'));
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:150'],
+            'description' => ['nullable', 'string'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'location' => ['required', 'string', 'max:150'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'category_id' => ['nullable', 'exists:categories,id'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('properties', 'public');
+        }
+
+        $data['user_id'] = Auth::id();
+
+        Property::create($data);
+
+        return redirect()
+            ->route('agent.properties.index')
+            ->with('success', 'Property added successfully.');
+    }
+
+    public function edit(Property $property)
+    {
+        abort_unless($property->user_id === Auth::id(), 403);
+
+        $categories = Category::orderBy('name')->get();
+
+        return view('agent.properties.edit', compact('property', 'categories'));
+    }
+
+    public function update(Request $request, Property $property)
+    {
+        abort_unless($property->user_id === Auth::id(), 403);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:150'],
+            'description' => ['nullable', 'string'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'location' => ['required', 'string', 'max:150'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'category_id' => ['nullable', 'exists:categories,id'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        if ($request->hasFile('image')) {
+            if ($property->image && Storage::disk('public')->exists($property->image)) {
+                Storage::disk('public')->delete($property->image);
+            }
+
+            $data['image'] = $request->file('image')->store('properties', 'public');
+        }
+
+        $property->update($data);
+
+        return redirect()
+            ->route('agent.properties.index')
+            ->with('success', 'Property updated successfully.');
+    }
+
+    public function destroy(Property $property)
+    {
+        abort_unless($property->user_id === Auth::id(), 403);
+
+        if ($property->image && Storage::disk('public')->exists($property->image)) {
+            Storage::disk('public')->delete($property->image);
+        }
+
+        $property->delete();
+
+        return redirect()
+            ->route('agent.properties.index')
+            ->with('success', 'Property deleted successfully.');
+    }
+}
+app/Http/Controllers/AuthController.php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+
+class AuthController extends Controller
+{
+    public function showLogin()
+    {
+        return view('auth.login');
+    }
+
+    public function showRegister()
+    {
+        return view('auth.register');
+    }
+
+    public function register(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:150', 'unique:users,email'],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'role' => ['required', Rule::in(['user', 'agent'])],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+        ]);
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
+            'role' => $validated['role'],
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return match ($user->role) {
+            'agent' => redirect()->route('agent.dashboard'),
+            default => redirect()->route('user.dashboard'),
+        };
+    }
+
+    public function login(Request $request)
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        if (!Auth::attempt($credentials, $request->boolean('remember'))) {
+            return back()
+                ->withErrors(['email' => 'Invalid email or password.'])
+                ->onlyInput('email');
+        }
+
+        $request->session()->regenerate();
+
+        return match (Auth::user()->role) {
+            'admin' => redirect()->route('admin.dashboard'),
+            'agent' => redirect()->route('agent.dashboard'),
+            default => redirect()->route('user.dashboard'),
+        };
+    }
+
+    public function logout(Request $request)
+    {
+        Auth::logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login');
+    }
+}
+app/Models/Property.php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
+class Property extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'user_id',
+        'category_id',
+        'title',
+        'description',
+        'price',
+        'location',
+        'status',
+        'image',
+    ];
+
+    protected $casts = [
+        'price' => 'decimal:2',
+    ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    public function getImageUrlAttribute()
+    {
+        return $this->image
+            ? asset('storage/' . $this->image)
+            : asset('images/no-image.png');
+    }
+}
+resources/views/layouts/agent.blade.php
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ $title ?? 'Agent Panel' }}</title>
+    <link rel="stylesheet" href="{{ asset('assets/css/agent.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand">Real Estate</div>
+
+        <nav class="sidebar-nav">
+            <a href="{{ route('agent.dashboard') }}" class="{{ request()->routeIs('agent.dashboard') ? 'active' : '' }}">
+                <i class="fa-solid fa-house"></i>
+                <span>Dashboard</span>
+            </a>
+
+            <a href="{{ route('agent.properties.index') }}" class="{{ request()->routeIs('agent.properties.*') ? 'active' : '' }}">
+                <i class="fa-solid fa-building"></i>
+                <span>My Properties</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-panel">
+        <header class="topbar">
+            <div>
+                <h1>{{ $pageTitle ?? 'Agent Panel' }}</h1>
+            </div>
+
+            <form action="{{ route('logout') }}" method="POST">
+                @csrf
+                <button type="submit" class="btn btn-danger">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    Logout
+                </button>
+            </form>
+        </header>
+
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
+
+        @yield('content')
+    </main>
+</div>
+</body>
+</html>
+resources/views/agent/properties/index.blade.php
+@extends('layouts.agent', [
+    'title' => 'My Properties',
+    'pageTitle' => 'My Properties'
+])
+
+@section('content')
+<div class="page-actions">
+    <a href="{{ route('agent.properties.create') }}" class="btn btn-primary">
+        <i class="fa-solid fa-plus"></i> Add Property
+    </a>
+</div>
+
+<div class="card table-card">
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Image</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th width="180">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($properties as $property)
+                    <tr>
+                        <td>
+                            <img src="{{ $property->image_url }}" alt="{{ $property->title }}" class="thumb">
+                        </td>
+                        <td>{{ $property->title }}</td>
+                        <td>{{ $property->category->name ?? '-' }}</td>
+                        <td>₹{{ number_format($property->price, 2) }}</td>
+                        <td>{{ $property->location }}</td>
+                        <td>
+                            <span class="badge {{ $property->status === 'active' ? 'badge-success' : 'badge-muted' }}">
+                                {{ ucfirst($property->status) }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-group">
+                                <a href="{{ route('agent.properties.edit', $property) }}" class="btn btn-sm btn-warning">Edit</a>
+
+                                <form action="{{ route('agent.properties.destroy', $property) }}" method="POST" onsubmit="return confirm('Delete this property?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="7" class="empty-state">No properties found.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pagination-wrap">
+        {{ $properties->links() }}
+    </div>
+</div>
+@endsection
+resources/views/agent/properties/create.blade.php
+@extends('layouts.agent', [
+    'title' => 'Add Property',
+    'pageTitle' => 'Add Property'
+])
+
+@section('content')
+<div class="card form-card">
+    @if($errors->any())
+        <div class="alert alert-danger">
+            <ul class="error-list">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <form action="{{ route('agent.properties.store') }}" method="POST" enctype="multipart/form-data" class="form-grid">
+        @csrf
+
+        <div class="field full">
+            <label>Title</label>
+            <input type="text" name="title" value="{{ old('title') }}" required>
+        </div>
+
+        <div class="field">
+            <label>Price</label>
+            <input type="number" step="0.01" name="price" value="{{ old('price') }}" required>
+        </div>
+
+        <div class="field">
+            <label>Location</label>
+            <input type="text" name="location" value="{{ old('location') }}" required>
+        </div>
+
+        <div class="field">
+            <label>Category</label>
+            <select name="category_id">
+                <option value="">Select Category</option>
+                @foreach($categories as $category)
+                    <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>
+                        {{ $category->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Status</label>
+            <select name="status" required>
+                <option value="active" {{ old('status') === 'active' ? 'selected' : '' }}>Active</option>
+                <option value="inactive" {{ old('status') === 'inactive' ? 'selected' : '' }}>Inactive</option>
+            </select>
+        </div>
+
+        <div class="field full">
+            <label>Description</label>
+            <textarea name="description" rows="5">{{ old('description') }}</textarea>
+        </div>
+
+        <div class="field full">
+            <label>Image</label>
+            <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp">
+        </div>
+
+        <div class="field full">
+            <button type="submit" class="btn btn-primary">Save Property</button>
+        </div>
+    </form>
+</div>
+@endsection
+resources/views/agent/properties/edit.blade.php
+@extends('layouts.agent', [
+    'title' => 'Edit Property',
+    'pageTitle' => 'Edit Property'
+])
+
+@section('content')
+<div class="card form-card">
+    @if($errors->any())
+        <div class="alert alert-danger">
+            <ul class="error-list">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <form action="{{ route('agent.properties.update', $property) }}" method="POST" enctype="multipart/form-data" class="form-grid">
+        @csrf
+        @method('PUT')
+
+        <div class="field full">
+            <label>Title</label>
+            <input type="text" name="title" value="{{ old('title', $property->title) }}" required>
+        </div>
+
+        <div class="field">
+            <label>Price</label>
+            <input type="number" step="0.01" name="price" value="{{ old('price', $property->price) }}" required>
+        </div>
+
+        <div class="field">
+            <label>Location</label>
+            <input type="text" name="location" value="{{ old('location', $property->location) }}" required>
+        </div>
+
+        <div class="field">
+            <label>Category</label>
+            <select name="category_id">
+                <option value="">Select Category</option>
+                @foreach($categories as $category)
+                    <option value="{{ $category->id }}" {{ old('category_id', $property->category_id) == $category->id ? 'selected' : '' }}>
+                        {{ $category->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Status</label>
+            <select name="status" required>
+                <option value="active" {{ old('status', $property->status) === 'active' ? 'selected' : '' }}>Active</option>
+                <option value="inactive" {{ old('status', $property->status) === 'inactive' ? 'selected' : '' }}>Inactive</option>
+            </select>
+        </div>
+
+        <div class="field full">
+            <label>Description</label>
+            <textarea name="description" rows="5">{{ old('description', $property->description) }}</textarea>
+        </div>
+
+        <div class="field full">
+            <label>Current Image</label>
+            <img src="{{ $property->image_url }}" alt="{{ $property->title }}" class="preview-image">
+        </div>
+
+        <div class="field full">
+            <label>Change Image</label>
+            <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp">
+        </div>
+
+        <div class="field full">
+            <button type="submit" class="btn btn-primary">Update Property</button>
+        </div>
+    </form>
+</div>
+@endsection
+resources/views/auth/login.blade.php
+@extends('layouts.auth', ['title' => 'Login'])
+
+@section('content')
+<div class="auth-card">
+    <h2>Login</h2>
+    <p class="auth-subtitle">Sign in to continue</p>
+
+    @if($errors->any())
+        <div class="alert alert-danger">
+            @foreach($errors->all() as $error)
+                <div>{{ $error }}</div>
+            @endforeach
+        </div>
+    @endif
+
+    <form action="{{ route('login.post') }}" method="POST">
+        @csrf
+
+        <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" value="{{ old('email') }}" required>
+        </div>
+
+        <div class="field">
+            <label>Password</label>
+            <input type="password" name="password" required>
+        </div>
+
+        <div class="field checkbox-field">
+            <label>
+                <input type="checkbox" name="remember" value="1"> Remember me
+            </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Login</button>
+    </form>
+</div>
+@endsection
+resources/views/auth/register.blade.php
+@extends('layouts.auth', ['title' => 'Register'])
+
+@section('content')
+<div class="auth-card">
+    <h2>Register</h2>
+    <p class="auth-subtitle">Create your account</p>
+
+    @if($errors->any())
+        <div class="alert alert-danger">
+            @foreach($errors->all() as $error)
+                <div>{{ $error }}</div>
+            @endforeach
+        </div>
+    @endif
+
+    <form action="{{ route('register.post') }}" method="POST">
+        @csrf
+
+        <div class="field">
+            <label>Name</label>
+            <input type="text" name="name" value="{{ old('name') }}" required>
+        </div>
+
+        <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" value="{{ old('email') }}" required>
+        </div>
+
+        <div class="field">
+            <label>Phone</label>
+            <input type="text" name="phone" value="{{ old('phone') }}">
+        </div>
+
+        <div class="field">
+            <label>Register As</label>
+            <select name="role" required>
+                <option value="user" {{ old('role') === 'user' ? 'selected' : '' }}>User</option>
+                <option value="agent" {{ old('role') === 'agent' ? 'selected' : '' }}>Agent</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Password</label>
+            <input type="password" name="password" required>
+        </div>
+
+        <div class="field">
+            <label>Confirm Password</label>
+            <input type="password" name="password_confirmation" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Register</button>
+    </form>
+</div>
+@endsection
+public/assets/css/agent.css
+:root{
+    --bg:#0b1220;
+    --panel:#121a2b;
+    --card:#172033;
+    --line:rgba(255,255,255,.08);
+    --text:#ecf2ff;
+    --muted:#98a6c3;
+    --primary:#6d5efc;
+    --success:#16a34a;
+    --danger:#dc2626;
+    --warning:#f59e0b;
+    --radius:16px;
+    --shadow:0 18px 45px rgba(0,0,0,.24);
+}
+
+*{box-sizing:border-box}
+body{
+    margin:0;
+    font-family:Arial, sans-serif;
+    background:linear-gradient(135deg,#0b1220,#111b30);
+    color:var(--text);
+}
+
+a{text-decoration:none;color:inherit}
+
+.app-shell{
+    display:grid;
+    grid-template-columns:260px 1fr;
+    min-height:100vh;
+}
+
+.sidebar{
+    background:rgba(13,19,34,.95);
+    border-right:1px solid var(--line);
+    padding:24px 18px;
+}
+
+.brand{
+    font-size:24px;
+    font-weight:700;
+    margin-bottom:24px;
+}
+
+.sidebar-nav{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.sidebar-nav a{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:12px 14px;
+    border-radius:12px;
+    color:var(--muted);
+    transition:.2s ease;
+}
+
+.sidebar-nav a:hover,
+.sidebar-nav a.active{
+    background:rgba(109,94,252,.16);
+    color:#fff;
+}
+
+.main-panel{
+    padding:24px;
+}
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:16px;
+    margin-bottom:20px;
+}
+
+.card{
+    background:rgba(255,255,255,.04);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+}
+
+.form-card,
+.table-card{
+    padding:20px;
+}
+
+.page-actions{
+    display:flex;
+    justify-content:flex-end;
+    margin-bottom:16px;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0,1fr));
+    gap:16px;
+}
+
+.field{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+
+.field.full{
+    grid-column:1 / -1;
+}
+
+label{
+    font-size:14px;
+    color:#dbe6ff;
+    font-weight:600;
+}
+
+input,
+select,
+textarea{
+    width:100%;
+    padding:12px 14px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:#0f172a;
+    color:#fff;
+    outline:none;
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px rgba(109,94,252,.15);
+}
+
+.btn{
+    border:none;
+    border-radius:12px;
+    padding:10px 16px;
+    cursor:pointer;
+    font-weight:600;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+}
+
+.btn-sm{
+    padding:8px 12px;
+    font-size:13px;
+}
+
+.btn-primary{background:var(--primary);color:#fff}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-warning{background:var(--warning);color:#111827}
+
+.alert{
+    padding:14px 16px;
+    border-radius:12px;
+    margin-bottom:18px;
+    border:1px solid transparent;
+}
+
+.alert-success{
+    background:rgba(22,163,74,.14);
+    color:#bbf7d0;
+    border-color:rgba(22,163,74,.3);
+}
+
+.alert-danger{
+    background:rgba(220,38,38,.14);
+    color:#fecaca;
+    border-color:rgba(220,38,38,.3);
+}
+
+.table-wrap{
+    overflow:auto;
+}
+
+.table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.table th,
+.table td{
+    padding:14px 12px;
+    border-bottom:1px solid var(--line);
+    text-align:left;
+    vertical-align:middle;
+}
+
+.table th{
+    color:#c9d7f3;
+    font-size:14px;
+}
+
+.thumb{
+    width:72px;
+    height:52px;
+    object-fit:cover;
+    border-radius:10px;
+    border:1px solid var(--line);
+}
+
+.preview-image{
+    width:180px;
+    height:120px;
+    object-fit:cover;
+    border-radius:14px;
+    border:1px solid var(--line);
+}
+
+.badge{
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+    display:inline-block;
+}
+
+.badge-success{
+    background:rgba(22,163,74,.16);
+    color:#bbf7d0;
+}
+
+.badge-muted{
+    background:rgba(148,163,184,.14);
+    color:#cbd5e1;
+}
+
+.action-group{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+
+.empty-state{
+    text-align:center;
+    color:var(--muted);
+    padding:28px 12px;
+}
+
+.error-list{
+    margin:0;
+    padding-left:18px;
+}
+
+.pagination-wrap{
+    margin-top:16px;
+}
+
+@media (max-width: 992px){
+    .app-shell{
+        grid-template-columns:1fr;
+    }
+
+    .sidebar{
+        border-right:none;
+        border-bottom:1px solid var(--line);
+    }
+
+    .form-grid{
+        grid-template-columns:1fr;
+    }
+
+    .topbar{
+        flex-direction:column;
+        align-items:flex-start;
+    }
+}
+routes/web.php
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Agent\PropertyController;
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+
+    Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
+    Route::post('/register', [AuthController::class, 'register'])->name('register.post');
+});
+
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+Route::middleware(['auth'])->prefix('agent')->name('agent.')->group(function () {
+    Route::view('/dashboard', 'agent.dashboard')->name('dashboard');
+    Route::resource('properties', PropertyController::class);
+});
